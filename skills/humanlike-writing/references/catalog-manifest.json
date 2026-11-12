@@ -1,0 +1,1079 @@
+{
+  "source": "This conversation research answer",
+  "count": 144,
+  "categories": {
+    "RH": 12,
+    "VX": 12,
+    "RT": 16,
+    "ST": 14,
+    "TN": 16,
+    "PA": 15,
+    "FM": 14,
+    "CL": 22,
+    "WP": 15,
+    "DT": 8
+  },
+  "patterns": [
+    {
+      "id": "RH-01",
+      "name": "Repeated sentence rhythm",
+      "sources": [
+        "desaire",
+        "th-method"
+      ]
+    },
+    {
+      "id": "RH-02",
+      "name": "Repeated grammatical skeleton",
+      "sources": [
+        "rhythm",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RH-03",
+      "name": "Repeated sentence openings",
+      "sources": [
+        "counter"
+      ]
+    },
+    {
+      "id": "RH-04",
+      "name": "Uniform paragraph length",
+      "sources": [
+        "desaire",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RH-05",
+      "name": "Uniform paragraph function",
+      "sources": [
+        "rhythm"
+      ]
+    },
+    {
+      "id": "RH-06",
+      "name": "Uniform readability",
+      "sources": [
+        "th-method"
+      ]
+    },
+    {
+      "id": "RH-07",
+      "name": "Mechanical long-short alternation",
+      "sources": [
+        "rhythm"
+      ]
+    },
+    {
+      "id": "RH-08",
+      "name": "Manufactured staccato",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RH-09",
+      "name": "Repeated punctuation habits",
+      "sources": [
+        "counter",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RH-10",
+      "name": "Narrow vocabulary",
+      "sources": [
+        "linguistic",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RH-11",
+      "name": "Phrase repetition",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RH-12",
+      "name": "Excessively smooth transitions",
+      "sources": [
+        "rhythm"
+      ]
+    },
+    {
+      "id": "VX-01",
+      "name": "Clusters of \u201cAI vocabulary\u201d",
+      "sources": [
+        "kobak",
+        "russell"
+      ]
+    },
+    {
+      "id": "VX-02",
+      "name": "Corporate buzzword stacking",
+      "sources": [
+        "prowlo-vocab",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "VX-03",
+      "name": "Promotional adjective stacking",
+      "sources": [
+        "humanizer",
+        "wiki"
+      ]
+    },
+    {
+      "id": "VX-04",
+      "name": "Ornate abstract nouns",
+      "sources": [
+        "prowlo-vocab",
+        "tropes"
+      ]
+    },
+    {
+      "id": "VX-05",
+      "name": "Inflated verbs",
+      "sources": [
+        "prowlo-vocab"
+      ]
+    },
+    {
+      "id": "VX-06",
+      "name": "Empty significance words",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "VX-07",
+      "name": "Magic adverbs",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "VX-08",
+      "name": "Stock importance prefaces",
+      "sources": [
+        "prowlo-vocab"
+      ]
+    },
+    {
+      "id": "VX-09",
+      "name": "Generic modern-world opening",
+      "sources": [
+        "th-patterns"
+      ]
+    },
+    {
+      "id": "VX-10",
+      "name": "Stock topic transitions",
+      "sources": [
+        "prowlo-vocab"
+      ]
+    },
+    {
+      "id": "VX-11",
+      "name": "Connector saturation",
+      "sources": [
+        "th-method",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "VX-12",
+      "name": "Clich\u00e9d trade-off language",
+      "sources": [
+        "prowlo-vocab"
+      ]
+    },
+    {
+      "id": "RT-01",
+      "name": "\u201cNot just X, but Y\u201d",
+      "sources": [
+        "prowlo-check",
+        "th-patterns"
+      ]
+    },
+    {
+      "id": "RT-02",
+      "name": "\u201cNot X, but Y\u201d",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-03",
+      "name": "Negation chains",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-04",
+      "name": "Rule-of-three saturation",
+      "sources": [
+        "prowlo-check"
+      ]
+    },
+    {
+      "id": "RT-05",
+      "name": "Colon followed by a triple",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RT-06",
+      "name": "Perfectly balanced clauses",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-07",
+      "name": "Rhetorical question-answer pairs",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-08",
+      "name": "Stacked rhetorical questions",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RT-09",
+      "name": "False suspense hooks",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-10",
+      "name": "False ranges",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "RT-11",
+      "name": "Universal-audience framing",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RT-12",
+      "name": "Generic concession",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RT-13",
+      "name": "Superficial trailing analysis",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "RT-14",
+      "name": "Unnecessary parenthetical nuance",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "RT-15",
+      "name": "Avoiding \u201cis\u201d and \u201chas\u201d",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "RT-16",
+      "name": "Generic aphorism",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "ST-01",
+      "name": "Announce-then-answer",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-02",
+      "name": "Prompt echo",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "ST-03",
+      "name": "Compulsive counting",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-04",
+      "name": "List-shaped prose",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-05",
+      "name": "Excessive sectioning",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "ST-06",
+      "name": "Padded enumeration",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "ST-07",
+      "name": "Bare marketing bullets",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "ST-08",
+      "name": "Paragraph interchangeability",
+      "sources": [
+        "humanizer",
+        "russell"
+      ]
+    },
+    {
+      "id": "ST-09",
+      "name": "One-point dilution",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-10",
+      "name": "Full content duplication",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-11",
+      "name": "Fractal summaries",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-12",
+      "name": "Recap-only conclusion",
+      "sources": [
+        "th-patterns"
+      ]
+    },
+    {
+      "id": "ST-13",
+      "name": "Never-ending conclusion",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "ST-14",
+      "name": "Low information density",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "TN-01",
+      "name": "Hedge-free absolute claims",
+      "sources": [
+        "desaire",
+        "th-method"
+      ]
+    },
+    {
+      "id": "TN-02",
+      "name": "Gratuitous universal scope",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "TN-03",
+      "name": "Over-hedging",
+      "sources": [
+        "prowlo-guide"
+      ]
+    },
+    {
+      "id": "TN-04",
+      "name": "Stacked hedges",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "TN-05",
+      "name": "Relentless balance",
+      "sources": [
+        "th-patterns"
+      ]
+    },
+    {
+      "id": "TN-06",
+      "name": "Unqualified optimism",
+      "sources": [
+        "russell",
+        "tropes"
+      ]
+    },
+    {
+      "id": "TN-07",
+      "name": "Formulaic resilience",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "TN-08",
+      "name": "Bland emotional range",
+      "sources": [
+        "russell"
+      ]
+    },
+    {
+      "id": "TN-09",
+      "name": "Impersonal exposition",
+      "sources": [
+        "linguistic"
+      ]
+    },
+    {
+      "id": "TN-10",
+      "name": "Register mismatch",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "TN-11",
+      "name": "No conversational contractions",
+      "sources": [
+        "humanize"
+      ]
+    },
+    {
+      "id": "TN-12",
+      "name": "Excessive polish for context",
+      "sources": [
+        "prowlo-guide"
+      ]
+    },
+    {
+      "id": "TN-13",
+      "name": "Sycophantic praise",
+      "sources": [
+        "prowlo-guide"
+      ]
+    },
+    {
+      "id": "TN-14",
+      "name": "Helpful-assistant sign-offs",
+      "sources": [
+        "prowlo-guide"
+      ]
+    },
+    {
+      "id": "TN-15",
+      "name": "False collaborative voice",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "TN-16",
+      "name": "Homogeneous quoted voices",
+      "sources": [
+        "russell"
+      ]
+    },
+    {
+      "id": "PA-01",
+      "name": "Invented analytical labels",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-02",
+      "name": "Announced profundity",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-03",
+      "name": "Self-labelled insight",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-04",
+      "name": "Unsupported novelty",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-05",
+      "name": "Historical analogy stacking",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-06",
+      "name": "Forced metaphor",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-07",
+      "name": "Staged candor",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-08",
+      "name": "Polished vulnerability",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-09",
+      "name": "Fake-casual packaging",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-10",
+      "name": "Lingering-attention claim",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-11",
+      "name": "Generic endorsement",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-12",
+      "name": "Imaginary crowd contrast",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-13",
+      "name": "Generic hypothetical person",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-14",
+      "name": "Speculative future scene",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "PA-15",
+      "name": "Speculative gap-filling",
+      "sources": [
+        "humanizer",
+        "tropes"
+      ]
+    },
+    {
+      "id": "FM-01",
+      "name": "Em-dash saturation",
+      "sources": [
+        "wiki",
+        "prowlo-check"
+      ]
+    },
+    {
+      "id": "FM-02",
+      "name": "Repeated semicolon linking",
+      "sources": [
+        "humanize"
+      ]
+    },
+    {
+      "id": "FM-03",
+      "name": "Colon-driven punchlines",
+      "sources": [
+        "humanize"
+      ]
+    },
+    {
+      "id": "FM-04",
+      "name": "Compound-modifier stacking",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "FM-05",
+      "name": "Unnecessary hyphenation",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "FM-06",
+      "name": "Bold-label bullets",
+      "sources": [
+        "prowlo-check"
+      ]
+    },
+    {
+      "id": "FM-07",
+      "name": "Excessive emphasis",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "FM-08",
+      "name": "Repeated title-case headings",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "FM-09",
+      "name": "Wh-question headings",
+      "sources": [
+        "tropes"
+      ]
+    },
+    {
+      "id": "FM-10",
+      "name": "Decorative symbols",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "FM-11",
+      "name": "Unnecessary tables",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "FM-12",
+      "name": "Mechanical dividers",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "FM-13",
+      "name": "Hashtag stuffing",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "FM-14",
+      "name": "Dense conversational block",
+      "sources": [
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-01",
+      "name": "Unnamed authority",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-02",
+      "name": "Inflated consensus",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-03",
+      "name": "Vague third-party validation",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-04",
+      "name": "Source name-dropping",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-05",
+      "name": "Vague association",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-06",
+      "name": "Fabricated reference",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-07",
+      "name": "Invalid identifier",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-08",
+      "name": "Identifier mismatch",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-09",
+      "name": "Citation\u2013claim mismatch",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-10",
+      "name": "Untraceable book claim",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-11",
+      "name": "Fabricated-looking links",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-12",
+      "name": "Orphaned references",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-13",
+      "name": "Chatbot citation tokens",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-14",
+      "name": "AI referral parameters",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-15",
+      "name": "Unfilled placeholders",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-16",
+      "name": "Assistant preamble",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-17",
+      "name": "Follow-up offer",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-18",
+      "name": "Reasoning narration",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-19",
+      "name": "Knowledge-cutoff residue",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-20",
+      "name": "Model self-identification",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-21",
+      "name": "Refusal residue",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "CL-22",
+      "name": "Abrupt unfinished output",
+      "sources": [
+        "wiki",
+        "humanizer"
+      ]
+    },
+    {
+      "id": "WP-01",
+      "name": "Duplicate title",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-02",
+      "name": "Empty parent headings",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-03",
+      "name": "Heading jumps",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-04",
+      "name": "Excessive top-level headings",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-05",
+      "name": "Wrong markup dialect",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-06",
+      "name": "Broken wiki syntax",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-07",
+      "name": "Invented categories",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-08",
+      "name": "Invented templates",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-09",
+      "name": "Policy assurances",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-10",
+      "name": "Preservation narration",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-11",
+      "name": "Submission coaching",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-12",
+      "name": "Premature status tags",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-13",
+      "name": "Canned user biography",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-14",
+      "name": "Stale access dates",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "WP-15",
+      "name": "Sudden style discontinuity",
+      "sources": [
+        "wiki"
+      ]
+    },
+    {
+      "id": "DT-01",
+      "name": "Low perplexity / high likelihood",
+      "sources": [
+        "detectgpt"
+      ]
+    },
+    {
+      "id": "DT-02",
+      "name": "Low token rank",
+      "sources": [
+        "detectgpt"
+      ]
+    },
+    {
+      "id": "DT-03",
+      "name": "Low predictability variation",
+      "sources": [
+        "gptzero"
+      ]
+    },
+    {
+      "id": "DT-04",
+      "name": "Probability curvature",
+      "sources": [
+        "detectgpt"
+      ]
+    },
+    {
+      "id": "DT-05",
+      "name": "Cross-model probability ratio",
+      "sources": [
+        "binoculars"
+      ]
+    },
+    {
+      "id": "DT-06",
+      "name": "Function-word profile",
+      "sources": [
+        "linguistic"
+      ]
+    },
+    {
+      "id": "DT-07",
+      "name": "Grammatical feature distribution",
+      "sources": [
+        "georgiou"
+      ]
+    },
+    {
+      "id": "DT-08",
+      "name": "Learned classifier features",
+      "sources": [
+        "gptzero"
+      ]
+    }
+  ]
+}

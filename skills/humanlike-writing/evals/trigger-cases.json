@@ -1,0 +1,82 @@
+[
+  {
+    "query": "Rewrite this project update so it sounds like a clear message to my team, keeping all dates and test results.",
+    "should_trigger": true
+  },
+  {
+    "query": "Humanize the attached email. Keep the deadline and do not invent anything about the sender.",
+    "should_trigger": true
+  },
+  {
+    "query": "Use humanlike-writing for your prose for the rest of this chat.",
+    "should_trigger": true
+  },
+  {
+    "query": "Remove the robotic phrasing from this explanation of our release process.",
+    "should_trigger": true
+  },
+  {
+    "query": "Make this grant summary readable while preserving the preliminary nature of the results.",
+    "should_trigger": true
+  },
+  {
+    "query": "Match my sample voice when rewriting this paragraph about the product launch.",
+    "should_trigger": true
+  },
+  {
+    "query": "This LinkedIn draft sounds like AI. Give a factual rewrite with fewer slogans.",
+    "should_trigger": true
+  },
+  {
+    "query": "Write a candid status update from these confirmed facts and known gaps.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit this article for repetitive rhythm and unsupported significance before editing it.",
+    "should_trigger": true
+  },
+  {
+    "query": "Turn these notes into a concise email to a colleague; keep the request and dates clear.",
+    "should_trigger": true
+  },
+  {
+    "query": "Return exactly the JSON object I give you, without explanation.",
+    "should_trigger": false
+  },
+  {
+    "query": "Print the following quotation verbatim, including its punctuation.",
+    "should_trigger": false
+  },
+  {
+    "query": "Calculate 17 times 24 and return only the number.",
+    "should_trigger": false
+  },
+  {
+    "query": "Rename a Python variable called underscore in this code without rewriting the documentation.",
+    "should_trigger": false
+  },
+  {
+    "query": "Explain what perplexity measures in language modeling; do not classify any author.",
+    "should_trigger": false
+  },
+  {
+    "query": "Find primary research on AI detector false positives and give source links.",
+    "should_trigger": false
+  },
+  {
+    "query": "Format this bibliography in the journal's mandated citation style without changing any fields.",
+    "should_trigger": false
+  },
+  {
+    "query": "Translate this legal clause literally while preserving its obligations.",
+    "should_trigger": false
+  },
+  {
+    "query": "Write a poem with deliberate repeated openings and the punctuation pattern I specify.",
+    "should_trigger": false
+  },
+  {
+    "query": "Parse these logs into CSV with exactly the given columns and no prose.",
+    "should_trigger": false
+  }
+]

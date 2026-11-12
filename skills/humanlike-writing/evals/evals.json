@@ -1,0 +1,49 @@
+{
+  "skill_name": "humanlike-writing",
+  "evals": [
+    {
+      "id": 1,
+      "name": "casual-email",
+      "prompt": "Rewrite this as a natural email to a teammate, under 90 words. Return only the email. Keep all facts and do not invent a sender name or an experience. Draft: 'In today's rapidly evolving workplace, it is important to note that we must delve into the planning landscape. Moreover, the team meeting has moved from Thursday to Friday at noon. It will be in Room 204. Furthermore, please send your budget notes by Thursday at 5 pm. The agenda includes hiring and equipment. This is not just a meeting; it is a pivotal opportunity to unlock meaningful collaboration. I hope this helps!'",
+      "expected_output": "Short email preserving the changed meeting day/time, room, budget deadline, and agenda; no stock padding, forbidden tokens, or invented details.",
+      "files": [],
+      "expectations": [
+        "Preserves move from Thursday to Friday at noon",
+        "Preserves Room 204",
+        "Preserves Thursday 5 pm budget-notes deadline",
+        "Preserves hiring and equipment agenda",
+        "Contains no prohibited word family or em dash in authored email",
+        "Stays below 90 words",
+        "Uses a conversational contraction"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "academic-uncertainty",
+      "prompt": "Rewrite the following as a formal academic abstract of at most 65 words. Return only the abstract, without a personal aside. Preserve the exploratory nature, sample size, follow-up, uncertainty, and supplied citation; do not claim the citation was verified. Draft: 'We conducted an exploratory study of 100 participants followed for eight weeks. Scores rose by 10%, which may reflect practice effects rather than treatment efficacy (Lee, 2024). This robust intervention unequivocally eliminates the problem, underscoring a transformative breakthrough for every patient.'",
+      "expected_output": "Formal abstract preserves 100 participants, eight weeks, 10%, exploratory status, possible practice effects, and (Lee, 2024), while removing the contradictory guarantee and promotional claims.",
+      "files": [],
+      "expectations": [
+        "Preserves exploratory study of 100 participants",
+        "Preserves eight-week follow-up",
+        "Preserves 10% score increase",
+        "Preserves possible practice effects rather than established treatment efficacy",
+        "Preserves supplied citation exactly",
+        "Omits unsupported guarantee, promotional adjectives, personal aside and verification claim",
+        "Stays at or below 65 words"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "protected-json",
+      "prompt": "Return only valid JSON with exactly these keys and values: status = ready; literal = underscore — literal; retries = 3. Do not add any other keys, explanation, Markdown fence, contractions, or opinion. Preserve the literal string exactly.",
+      "expected_output": "Exactly {\"status\":\"ready\",\"literal\":\"underscore — literal\",\"retries\":3}, allowing JSON whitespace/key order differences; protected word and punctuation remain unchanged.",
+      "files": [],
+      "expectations": [
+        "Is valid JSON without Markdown or explanatory prose",
+        "Has exactly requested keys and correct value types",
+        "Preserves protected literal including banned word and em dash"
+      ]
+    }
+  ]
+}
