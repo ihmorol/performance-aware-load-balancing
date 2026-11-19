@@ -18,10 +18,12 @@ def test_dev_config_loads_in_pilot_stage():
 
 
 def full_main_config_text():
-    """dev.toml with stage main and the quota keys that dev.toml leaves unset."""
+    """dev.toml with stage main and the keys that dev.toml leaves unset."""
     text = DEV_CONFIG.read_text(encoding="utf-8")
     text = text.replace('stage = "pilot"', 'stage = "main"')
-    return text.replace("[quota]\n", "[quota]\ncpu_percent = 50.0\nperiod_ms = 100\n")
+    text = text.replace("[quota]\n", "[quota]\ncpu_percent = 50.0\nperiod_ms = 100\n")
+    text = text.replace("[weights]\n", "[weights]\nmax_sum = 10\n")
+    return text.replace("[ssh]\n", '[ssh]\nuser = "plb"\nkey_path = "~/.ssh/plb"\n')
 
 
 def git(repo, *args):

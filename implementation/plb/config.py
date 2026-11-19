@@ -1,7 +1,8 @@
 """Load and check the one TOML config file that holds every tunable value.
 
 The schema below is the whole key list from the "Config" section of
-implementation/spec.md. A key that is missing from the file loads as None.
+implementation/spec.md, plus the SSH login that issue #6 needs and the
+largest weight sum that issue #7's calibration rounds to. A key that is missing from the file loads as None.
 That is allowed in the pilot stage, where the pilot has not decided every
 value yet. In the main stage every key must be set and the git working tree
 must be clean, or loading raises ConfigError.
@@ -77,6 +78,9 @@ class RatesConfig:
 
 @dataclass(frozen=True)
 class WeightsConfig:
+    # Largest allowed sum of the two weights when calibration rounds
+    # throughputs to a small integer ratio.
+    max_sum: int | None = None
     # Smooth weighted round-robin weights for worker 1 and worker 2.
     scenario1: tuple[int, int] | None = None
     scenario2: tuple[int, int] | None = None
@@ -130,6 +134,14 @@ class SeedsConfig:
 
 
 @dataclass(frozen=True)
+class SshConfig:
+    # Login and private key the orchestrator uses for ssh and scp to the VMs.
+    # The VM hosts come from the addresses section.
+    user: str | None = None
+    key_path: str | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     stage: str
     addresses: AddressesConfig = AddressesConfig()
@@ -143,6 +155,7 @@ class Config:
     quota: QuotaConfig = QuotaConfig()
     monitoring: MonitoringConfig = MonitoringConfig()
     seeds: SeedsConfig = SeedsConfig()
+    ssh: SshConfig = SshConfig()
 
 
 def load_config(path: str | Path) -> Config:

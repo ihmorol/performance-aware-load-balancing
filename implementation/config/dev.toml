@@ -32,6 +32,7 @@ scenario1 = [1.0, 2.0, 3.0]
 scenario2 = [1.0, 2.0, 3.0]
 scenario3 = [1.0, 2.0, 3.0]
 
+# max_sum is a team choice for calibration, left unset here.
 [weights]
 scenario1 = [1, 1]
 scenario2 = [1, 1]
@@ -61,3 +62,6 @@ bottleneck_cpu_percent = 80.0
 image_set = 1
 schedule = 1
 round_order = 1
+
+# ssh is only used against the VMs, so it stays unset here.
+[ssh]
