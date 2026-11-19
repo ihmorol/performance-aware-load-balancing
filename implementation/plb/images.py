@@ -6,6 +6,8 @@ Pillow version give byte-identical files.
 
 Layout: <out>/<size class>/<size class>-<NN>.jpg, for example
 local/images/medium/medium-00.jpg. The file name without ".jpg" is the image id.
+The dispatcher and load generator don't need the files: generate_image and
+generate_image_set give the same bytes in memory.
 
     python -m plb.images --config config/dev.toml --out local/images
 """
@@ -15,6 +17,7 @@ from __future__ import annotations
 import argparse
 import io
 import random
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageOps
@@ -28,22 +31,40 @@ SOURCE_QUALITY = 90
 NOISE_SHARE = 0.15
 
 
+@dataclass(frozen=True)
+class GeneratedImage:
+    image_id: str
+    size_class: str
+    data: bytes
+
+
+def generate_image(images: ImagesConfig, seed: int, size_class: str, index: int) -> GeneratedImage:
+    """Draw one image of the set in memory, the same bytes the set would hold."""
+    width, height = getattr(images.resolutions, size_class)
+    image_id = f"{size_class}-{index:02d}"
+    # A string seed is hashed with SHA-512, so it gives the same stream on
+    # every machine and every run.
+    rng = random.Random(f"{seed}:{image_id}")
+    return GeneratedImage(image_id, size_class, _draw_jpeg(rng, width, height))
+
+
+def generate_image_set(images: ImagesConfig, seed: int) -> list[GeneratedImage]:
+    """Draw per_class images for each size class in memory."""
+    return [
+        generate_image(images, seed, size_class, index)
+        for size_class in SIZE_CLASSES
+        for index in range(images.per_class)
+    ]
+
+
 def write_image_set(images: ImagesConfig, seed: int, out_dir: str | Path) -> list[Path]:
-    """Write per_class images for each size class and return their paths."""
-    out_dir = Path(out_dir)
+    """Write the image set under out_dir and return the file paths."""
     paths = []
-    for size_class in SIZE_CLASSES:
-        width, height = getattr(images.resolutions, size_class)
-        class_dir = out_dir / size_class
-        class_dir.mkdir(parents=True, exist_ok=True)
-        for index in range(images.per_class):
-            image_id = f"{size_class}-{index:02d}"
-            # A string seed is hashed with SHA-512, so it gives the same
-            # stream on every machine and every run.
-            rng = random.Random(f"{seed}:{image_id}")
-            path = class_dir / f"{image_id}.jpg"
-            path.write_bytes(_draw_jpeg(rng, width, height))
-            paths.append(path)
+    for image in generate_image_set(images, seed):
+        path = Path(out_dir) / image.size_class / f"{image.image_id}.jpg"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(image.data)
+        paths.append(path)
     return paths
 
 
