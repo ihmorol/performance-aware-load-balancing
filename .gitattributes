@@ -1,0 +1,3 @@
+# Keep config files byte-identical on every OS, so the recorded config hash
+# depends only on the content and not on how git checked the file out.
+*.toml text eol=lf

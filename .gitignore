@@ -15,3 +15,7 @@ Thumbs.db
 
 # Scratch files
 *.tmp
+
+# Local outputs: generated image sets, worker logs, and other files from local runs
+implementation/local/
+*.egg-info/
