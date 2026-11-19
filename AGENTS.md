@@ -52,6 +52,7 @@ This project compares four load balancing rules. Its value is a fair, repeatable
 | `results/` | Raw measurements and summaries, one folder per scenario. |
 | `notes/` | Decisions, open questions, meeting notes. |
 | `skills/` | The vendored writing skills. Update only with owner approval. |
+| `.claude/skills/` | Matt Pocock's engineering skills for Claude Code. See its README. |
 
 New documents belong in one of these folders, not the repository root.
 
