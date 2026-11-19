@@ -105,6 +105,7 @@ def create_app(
 
 def write_log(log: list[dict], path: str | Path) -> None:
     """Write every log row so far to a CSV file, replacing the file."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=LOG_COLUMNS)
         writer.writeheader()

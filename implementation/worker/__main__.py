@@ -29,8 +29,6 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("worker.queue_capacity is unset in the config")
 
     log_path = Path(args.log or f"local/worker-{args.port}.csv")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
     app = create_app(capacity, shutdown_log_path=log_path)
     # No access log: one line per request would add work to every measurement.
     uvicorn.run(app, host=args.host, port=args.port, access_log=False)

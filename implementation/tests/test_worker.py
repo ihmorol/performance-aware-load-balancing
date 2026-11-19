@@ -187,3 +187,12 @@ async def test_a_body_that_is_not_an_image_fails_alone(tmp_path):
     assert broken.headers[protocol.OUTCOME] == protocol.ERROR
     assert after.status_code == 200
     assert [(r["request_id"], r["outcome"]) for r in rows] == [("broken", "error"), ("after", "done")]
+
+
+async def test_flush_creates_missing_folders(tmp_path):
+    path = tmp_path / "run-1" / "logs" / "worker.csv"
+    async with running(create_app(queue_capacity=1)) as client:
+        await process_request(client, "r1", jpeg(120, 80))
+        rows = await flush(client, path)
+
+    assert [r["request_id"] for r in rows] == ["r1"]
