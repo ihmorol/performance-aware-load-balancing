@@ -24,9 +24,11 @@ OUTCOME = "X-Outcome"
 # Dispatcher reply to the generator.
 CHOSEN_WORKER = "X-Chosen-Worker"
 
-# Terminal outcomes. The worker produces the first three; the dispatcher and
-# generator add the last two.
+# Terminal outcomes. The worker logs and replies with DONE, REJECTED,
+# EXPIRED, or ERROR. The dispatcher and generator call a worker's 200 reply
+# SUCCESS, and add TIMEOUT for a request that got no reply in time.
 DONE = "done"
+SUCCESS = "success"
 REJECTED = "rejected"
 EXPIRED = "expired"
 TIMEOUT = "timeout"
