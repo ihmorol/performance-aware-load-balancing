@@ -21,3 +21,15 @@ Confirmed choices, newest last. Each entry names its source.
 | 2026-11-19 | Slowed worker uses systemd CPUQuota on the worker service inside the VM; quota and period set in the pilot. | Triage default, audit C6; owner may change |
 | 2026-11-19 | Five shuffled rounds of 36 conditions (180 main runs). Report median with min and max; a difference is "clear" only when five-run ranges do not overlap. No significance tests. | Triage default, audit C4 and C5; owner may change |
 | 2026-11-19 | Load generator is open loop with a seeded schedule shared by all rules. | Audit C3 |
+| 2026-11-19 | Real order of work: build and test locally, deploy to VMs, pilot, calibrate, freeze, dry run. Slide 4 week labels stay unchanged in the paper. | Owner, grilling session; `implementation/spec.md` |
+| 2026-11-19 | Main runs on a teammate's PC with VirtualBox (the 12 logical CPU, 13.9 GB machine). Code is developed and tested as localhost processes on any laptop. Colab is not used. | Owner, grilling session |
+| 2026-11-19 | Load generator and orchestrator run on the host OS of the experiment PC. Orchestrator uses plain ssh with keys and limited sudo. | Owner, grilling session |
+| 2026-11-19 | Stack: Ubuntu Server 24.04 LTS, Python 3.12 on VMs and host, FastAPI, Uvicorn, HTTPX, Pillow, psutil, pytest, pinned. One shared package, one TOML config; runs record commit id and config hash. | Owner, grilling session |
+| 2026-11-19 | Requests upload the image bytes; the worker returns the processed bytes. The dispatcher buffers the whole body. | Owner, grilling session |
+| 2026-11-19 | Image set: seeded synthetic JPEGs. Operation: resize to half width and height (LANCZOS), JPEG quality 80. Scenario 1 uses the medium class only. | Owner, grilling session |
+| 2026-11-19 | Seeded Poisson open-loop schedule. Response time from the generator's clock only; dispatcher log joined on request id. | Owner, grilling session |
+| 2026-11-19 | Dispatcher sends a time budget with each request; the worker skips queued requests whose budget has passed. | Owner, grilling session |
+| 2026-11-19 | Feedback estimate: EWMA of worker-reported processing time from successful and probe replies; weight chosen in the pilot. Probe after T seconds with no completion. | Owner, grilling session |
+| 2026-11-19 | Reset restarts the services. A run ends when every request has a terminal outcome. Requests in the first W seconds are dropped. p95 by nearest rank over successes; throughput is successes per second. Samplers every 1 second. | Owner, grilling session |
+| 2026-11-19 | Weighted round-robin calibration keeps each worker busy directly with the scenario's mix. Queue capacity set in the pilot by a stated rule. | Owner, grilling session |
+| 2026-11-19 | Tests: pure select() tests plus dispatcher with fake workers, built test-first. Build in ordered slices. Spec ends with a short dry-run round of all 36 conditions. | Owner, grilling session |
