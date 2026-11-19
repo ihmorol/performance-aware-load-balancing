@@ -50,11 +50,15 @@ async def test_reply_is_a_half_size_jpeg_with_processing_time():
         assert output.size == (80, 45)
 
 
+def read_rows(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
 async def flush(client, path):
     reply = await client.post("/admin/flush", json={"path": str(path)})
     assert reply.status_code == 200
-    with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    return read_rows(path)
 
 
 async def test_two_identical_requests_are_both_processed(tmp_path):
@@ -104,7 +108,7 @@ async def test_full_queue_rejects_at_once_with_503():
 
         with anyio.fail_after(2):
             rejected = await process_request(client, "extra", body)
-        still_running = not gate.release.is_set()
+        still_running = not running_task.done()
 
         gate.release.set()
         replies = await asyncio.gather(running_task, queued_task)
@@ -171,9 +175,7 @@ async def test_log_is_written_on_shutdown(tmp_path):
     async with running(app) as client:
         await process_request(client, "r1", jpeg(120, 80))
 
-    with open(path, newline="", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
-    assert [(r["request_id"], r["outcome"]) for r in rows] == [("r1", "done")]
+    assert [(r["request_id"], r["outcome"]) for r in read_rows(path)] == [("r1", "done")]
 
 
 async def test_a_body_that_is_not_an_image_fails_alone(tmp_path):
@@ -196,3 +198,14 @@ async def test_flush_creates_missing_folders(tmp_path):
         rows = await flush(client, path)
 
     assert [r["request_id"] for r in rows] == ["r1"]
+
+
+async def test_a_budget_that_is_not_a_number_is_refused_and_logged(tmp_path):
+    headers = {protocol.REQUEST_ID: "bad-budget", protocol.BUDGET_MS: "soon"}
+    async with running(create_app(queue_capacity=1)) as client:
+        reply = await client.post("/process", content=jpeg(120, 80), headers=headers)
+        rows = await flush(client, tmp_path / "worker.csv")
+
+    assert reply.status_code == 400
+    assert reply.headers[protocol.OUTCOME] == protocol.ERROR
+    assert [(r["request_id"], r["outcome"]) for r in rows] == [("bad-budget", "error")]

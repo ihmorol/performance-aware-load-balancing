@@ -6,7 +6,7 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 
 ## Layout
 
-- `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), and the seeded image set generator (`plb.images`).
+- `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), and the seeded image set generator (`plb.images`).
 - `worker/`: the image processing service. Built.
 - `dispatcher/`: routing rules and the forwarding path. Not built yet.
 - `experiments/`: load generator, orchestrator, pilot tools, and the per-run summary. Not built yet.
@@ -40,7 +40,7 @@ TOML files are checked out with LF line endings on every OS (see `.gitattributes
 python -m plb.images --config config/dev.toml --out local/images
 ```
 
-This writes `per_class` synthetic JPEGs for each size class: `local/images/<class>/<class>-<NN>.jpg`. The file name without `.jpg` is the image id. Each image is a colour gradient with random shapes and blended noise. The seed comes from `seeds.image_set` (or `--seed`). The same seed and the same Pillow version give byte-identical files. `local/` is ignored by git.
+This writes `per_class` synthetic JPEGs for each size class: `local/images/<class>/<class>-<NN>.jpg`. The file name without `.jpg` is the image id. Each image is a colour gradient with random shapes and blended noise. The seed comes from `seeds.image_set` (or `--seed`). The same seed and the same Pillow version give byte-identical files. `local/` is ignored by git. The dispatcher and load generator can skip the files: `plb.images.generate_image` and `generate_image_set` give the same bytes in memory.
 
 ## Worker
 
@@ -52,7 +52,7 @@ Add `--host 0.0.0.0` on a VM. The queue capacity comes from `worker.queue_capaci
 
 - `POST /process` takes JPEG bytes. The worker decodes the image, resizes it to half width and height with LANCZOS, and encodes it as JPEG quality 80. Only that work is timed. The reply is 200 with the JPEG and the headers `X-Outcome: done`, `X-Processing-Ms`, and `X-Output-Bytes`.
 - One request is processed at a time, and up to `queue_capacity` more wait in the queue. When the queue is full, the reply is 503 with `X-Outcome: rejected` at once.
-- `X-Budget-Ms` is the time budget from arrival. If it has passed by the time a queued request would start, the reply is 504 with `X-Outcome: expired` and no image work is done. A request without the header never expires.
+- `X-Budget-Ms` is the time budget from arrival. If it has passed by the time a queued request would start, the reply is 504 with `X-Outcome: expired` and no image work is done. A request without the header never expires. A header that isn't a number gets 400 with `X-Outcome: error`.
 - A body Pillow can't decode gets 500 with `X-Outcome: error`. The worker keeps serving other requests.
 - `GET /health` does no image work.
 - `POST /admin/flush` with `{"path": "<csv file>"}` writes the per-request log (`request_id, arrival_unix_s, queue_wait_ms, processing_ms, outcome`). The worker also writes it to `--log` (default `local/worker-<port>.csv`) when it shuts down cleanly.

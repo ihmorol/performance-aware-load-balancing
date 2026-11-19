@@ -20,13 +20,8 @@ from fastapi import FastAPI, Request, Response
 from pydantic import BaseModel
 
 from plb import protocol
+from plb.rows import WORKER_LOG_COLUMNS
 from worker.imaging import process_jpeg
-
-
-# Columns of the worker log. arrival_unix_s is wall-clock time, kept only to
-# line rows up with other logs from the same machine; queue_wait_ms and
-# processing_ms come from time.perf_counter, a monotonic clock.
-LOG_COLUMNS = ("request_id", "arrival_unix_s", "queue_wait_ms", "processing_ms", "outcome")
 
 
 class FlushRequest(BaseModel):
@@ -39,8 +34,9 @@ class _Job:
     body: bytes
     # time.perf_counter() at arrival. It is a monotonic clock, and unlike
     # time.monotonic() on Windows it does not move in steps of about 15 ms.
-    arrival: float
-    arrival_unix: float
+    # Queue wait and the budget check are measured from it.
+    arrival_perf_s: float
+    arrival_unix_s: float
     budget_ms: float | None  # None when the request carries no budget header
     reply: asyncio.Future = field(default_factory=lambda: asyncio.get_running_loop().create_future())
 
@@ -77,19 +73,24 @@ def create_app(
 
     @app.post("/process")
     async def process_endpoint(request: Request) -> Response:
-        arrival, arrival_unix = time.perf_counter(), time.time()
+        arrival_perf_s, arrival_unix_s = time.perf_counter(), time.time()
+        budget = request.headers.get(protocol.BUDGET_MS)
         job = _Job(
             request_id=request.headers.get(protocol.REQUEST_ID, ""),
             body=await request.body(),
-            arrival=arrival,
-            arrival_unix=arrival_unix,
-            budget_ms=_budget_ms(request),
+            arrival_perf_s=arrival_perf_s,
+            arrival_unix_s=arrival_unix_s,
+            budget_ms=None,
         )
+        if budget is not None:
+            try:
+                job.budget_ms = float(budget)
+            except ValueError:
+                return _failed(log, job, protocol.ERROR, 400)
         try:
             request.app.state.queue.put_nowait(job)
         except asyncio.QueueFull:
-            _record(log, job, protocol.REJECTED)
-            return Response(status_code=503, headers={protocol.OUTCOME: protocol.REJECTED})
+            return _failed(log, job, protocol.REJECTED, 503)
         return await job.reply
 
     @app.get("/health")
@@ -109,7 +110,7 @@ def write_log(log: list[dict], path: str | Path) -> None:
     """Write every log row so far to a CSV file, replacing the file."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=LOG_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=WORKER_LOG_COLUMNS)
         writer.writeheader()
         writer.writerows(log)
 
@@ -117,18 +118,16 @@ def write_log(log: list[dict], path: str | Path) -> None:
 async def _consume(queue: asyncio.Queue, process: Callable[[bytes], bytes], log: list[dict]) -> None:
     while True:
         job: _Job = await queue.get()
-        queue_wait_ms = (time.perf_counter() - job.arrival) * 1000
+        queue_wait_ms = (time.perf_counter() - job.arrival_perf_s) * 1000
         if job.budget_ms is not None and queue_wait_ms > job.budget_ms:
             # Nobody is waiting for this reply any more, so skip the image work.
-            _record(log, job, protocol.EXPIRED, queue_wait_ms)
-            _reply(job, Response(status_code=504, headers={protocol.OUTCOME: protocol.EXPIRED}))
+            _reply(job, _failed(log, job, protocol.EXPIRED, 504, queue_wait_ms))
             continue
         try:
             output, seconds = await asyncio.to_thread(_timed, process, job.body)
         except Exception:
             # A body Pillow can't handle fails alone; the consumer keeps going.
-            _record(log, job, protocol.ERROR, queue_wait_ms)
-            _reply(job, Response(status_code=500, headers={protocol.OUTCOME: protocol.ERROR}))
+            _reply(job, _failed(log, job, protocol.ERROR, 500, queue_wait_ms))
             continue
         _record(log, job, protocol.DONE, queue_wait_ms, seconds * 1000)
         _reply(job, Response(
@@ -148,16 +147,18 @@ def _reply(job: _Job, response: Response) -> None:
         job.reply.set_result(response)
 
 
-def _budget_ms(request: Request) -> float | None:
-    value = request.headers.get(protocol.BUDGET_MS)
-    return None if value is None else float(value)
+def _failed(log: list[dict], job: _Job, outcome: str, status: int,
+            queue_wait_ms: float | None = None) -> Response:
+    """Log a request that ends without image output and build its reply."""
+    _record(log, job, outcome, queue_wait_ms)
+    return Response(status_code=status, headers={protocol.OUTCOME: outcome})
 
 
 def _record(log: list[dict], job: _Job, outcome: str, queue_wait_ms: float | None = None,
             processing_ms: float | None = None) -> None:
     log.append({
         "request_id": job.request_id,
-        "arrival_unix_s": f"{job.arrival_unix:.6f}",
+        "arrival_unix_s": f"{job.arrival_unix_s:.6f}",
         "queue_wait_ms": "" if queue_wait_ms is None else f"{queue_wait_ms:.3f}",
         "processing_ms": "" if processing_ms is None else f"{processing_ms:.3f}",
         "outcome": outcome,
