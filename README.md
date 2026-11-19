@@ -8,7 +8,7 @@ Our contribution is a fair, repeatable comparison. Not a new algorithm, and no c
 
 ## Status
 
-The proposal stage is done. Its artifacts are frozen in `final/`. Next: build the system, run the three scenarios, write the term paper (10 to 15 pages, at least 8 references, per the course guidelines).
+The proposal stage is done. Its artifacts are frozen in `final/`. The current plan is `paper/revised-proposal.md` (2026-11-19), which keeps the frozen theme and fixes wording and open details. Next: build the system per `implementation/implementation-plan.md`, run the three scenarios, write the term paper (10 to 15 pages, at least 8 references, per the course guidelines).
 
 ## Team and proposal slides
 
