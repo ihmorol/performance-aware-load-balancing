@@ -25,7 +25,7 @@ from worker.imaging import process_jpeg
 
 # Columns of the worker log. arrival_unix_s is wall-clock time, kept only to
 # line rows up with other logs from the same machine; queue_wait_ms and
-# processing_ms come from the monotonic and perf_counter clocks.
+# processing_ms come from time.perf_counter, a monotonic clock.
 LOG_COLUMNS = ("request_id", "arrival_unix_s", "queue_wait_ms", "processing_ms", "outcome")
 
 
@@ -37,7 +37,9 @@ class FlushRequest(BaseModel):
 class _Job:
     request_id: str
     body: bytes
-    arrival: float  # time.monotonic() when the request arrived
+    # time.perf_counter() at arrival. It is a monotonic clock, and unlike
+    # time.monotonic() on Windows it does not move in steps of about 15 ms.
+    arrival: float
     arrival_unix: float
     budget_ms: float | None  # None when the request carries no budget header
     reply: asyncio.Future = field(default_factory=lambda: asyncio.get_running_loop().create_future())
@@ -75,7 +77,7 @@ def create_app(
 
     @app.post("/process")
     async def process_endpoint(request: Request) -> Response:
-        arrival, arrival_unix = time.monotonic(), time.time()
+        arrival, arrival_unix = time.perf_counter(), time.time()
         job = _Job(
             request_id=request.headers.get(protocol.REQUEST_ID, ""),
             body=await request.body(),
@@ -115,7 +117,7 @@ def write_log(log: list[dict], path: str | Path) -> None:
 async def _consume(queue: asyncio.Queue, process: Callable[[bytes], bytes], log: list[dict]) -> None:
     while True:
         job: _Job = await queue.get()
-        queue_wait_ms = (time.monotonic() - job.arrival) * 1000
+        queue_wait_ms = (time.perf_counter() - job.arrival) * 1000
         if job.budget_ms is not None and queue_wait_ms > job.budget_ms:
             # Nobody is waiting for this reply any more, so skip the image work.
             _record(log, job, protocol.EXPIRED, queue_wait_ms)
