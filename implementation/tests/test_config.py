@@ -77,3 +77,12 @@ def test_config_hash_changes_when_one_byte_changes(tmp_path):
     path.write_bytes(bytes(data))
 
     assert config_hash(path) != before
+
+
+def test_main_stage_with_an_untracked_config_file_raises(tmp_path):
+    committed_repo(tmp_path, full_main_config_text())
+    untracked = tmp_path / "frozen.toml"
+    untracked.write_text(full_main_config_text(), encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="not committed"):
+        load_config(untracked)

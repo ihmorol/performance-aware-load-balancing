@@ -2,10 +2,11 @@
 
 The schema below is the whole key list from the "Config" section of
 implementation/spec.md, plus the SSH login that issue #6 needs and the
-largest weight sum that issue #7's calibration rounds to. A key that is missing from the file loads as None.
-That is allowed in the pilot stage, where the pilot has not decided every
-value yet. In the main stage every key must be set and the git working tree
-must be clean, or loading raises ConfigError.
+largest weight sum that issue #7's calibration rounds to. A key that is
+missing from the file loads as None. That is allowed in the pilot stage, where
+the pilot has not decided every value yet. In the main stage every key must be
+set, the config file itself must be committed, and tracked files must have no
+uncommitted changes, or loading raises ConfigError.
 """
 
 from __future__ import annotations
@@ -177,7 +178,7 @@ def load_config(path: str | Path) -> Config:
         unset = _unset_keys(config)
         if unset:
             raise ConfigError(f"{path}: main stage needs every value set; unset: {', '.join(unset)}")
-        _require_clean_git(path.parent)
+        _require_clean_git(path)
     return config
 
 
@@ -191,9 +192,15 @@ def git_commit(directory: str | Path = ".") -> str:
     return _git(directory, "rev-parse", "HEAD").strip()
 
 
-def _require_clean_git(directory: Path) -> None:
-    # Untracked files are ignored: run outputs land in the tree during a
-    # round, and code only takes effect once tracked code imports it.
+def _require_clean_git(config_path: Path) -> None:
+    directory = config_path.parent
+    # The run records the commit id, so that commit must hold this config.
+    try:
+        _git(directory, "ls-files", "--error-unmatch", config_path.name)
+    except ConfigError as exc:
+        raise ConfigError(f"main stage config {config_path} is not committed to git") from exc
+    # Other untracked files are ignored: run outputs land in the tree during
+    # a round, and code only takes effect once tracked code imports it.
     status = _git(directory, "status", "--porcelain", "--untracked-files=no")
     if status.strip():
         raise ConfigError(f"main stage needs a clean git working tree; uncommitted changes:\n{status}")
