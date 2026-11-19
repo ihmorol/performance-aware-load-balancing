@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plb"
+version = "0.1.0"
+description = "Dispatcher, workers, and experiment tools for the performance-aware load balancing study"
+requires-python = ">=3.12,<3.13"
+
+[tool.setuptools.packages.find]
+include = ["plb*", "worker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
