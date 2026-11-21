@@ -213,7 +213,9 @@ def create_app(
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         nonlocal client
-        client = httpx.AsyncClient(transport=transport)
+        # No HTTPX timeout: its default of 5 s could end a request before D.
+        # forward() enforces D itself.
+        client = httpx.AsyncClient(transport=transport, timeout=None)
         # Warm-up runs in the background so /health can answer meanwhile.
         background = asyncio.create_task(start_up())
         try:
