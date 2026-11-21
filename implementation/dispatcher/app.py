@@ -37,6 +37,10 @@ class WorkerState:
     url: str
     unfinished: int = 0
     estimate_ms: float | None = None  # None until the first sample
+    # time.perf_counter() of the last reply that fed the estimate.
+    last_completion_s: float | None = None
+    probe_in_flight: bool = False
+    probes_sent: int = 0
 
 
 @dataclass
@@ -78,6 +82,8 @@ def create_app(
     log: list[dict] = []
     health = "warming up"  # then "ok", or "warm-up failed" for good
     warmup_image = generate_image(config.images, config.seeds.image_set, "medium", 0)
+    probe_image = generate_image(config.images, config.seeds.image_set, "small", 0)
+    probes: set[asyncio.Task] = set()  # probe tasks still running
 
     def snapshot() -> tuple[WorkerView, WorkerView]:
         return tuple(WorkerView(w.unfinished, w.estimate_ms) for w in workers)
@@ -114,9 +120,11 @@ def create_app(
             return Result(protocol.EXPIRED, 504, reply)
         if reply.status_code != 200:
             return Result(protocol.ERROR, 502, reply)
+        # Updated under every rule, though only the feedback rule reads it.
         worker.estimate_ms = update_estimate(
             worker.estimate_ms, float(reply.headers[protocol.PROCESSING_MS]), config.dispatcher.ewma_weight,
         )
+        worker.last_completion_s = time.perf_counter()
         return Result(protocol.SUCCESS, 200, reply)
 
     def record(job: Job, index: int, seen: tuple[WorkerView, WorkerView], select_ns: int | None,
@@ -163,9 +171,41 @@ def create_app(
                 all_succeeded = all_succeeded and result.outcome == protocol.SUCCESS
         return all_succeeded
 
+    async def probe(index: int) -> None:
+        worker = workers[index]
+        job = Job(f"probe-{WORKER_NAMES[index]}-{worker.probes_sent}", probe_image.image_id,
+                  probe_image.size_class, probe_image.data, probe=True)
+        worker.probes_sent += 1
+        try:
+            await send_without_select(index, job)
+        finally:
+            worker.probe_in_flight = False
+
+    async def probe_loop() -> None:
+        """Probe a worker with no completion for T seconds and nothing unfinished."""
+        threshold_s = config.dispatcher.probe_threshold_s
+        while True:
+            await asyncio.sleep(threshold_s / 4)
+            now = time.perf_counter()
+            for index, worker in enumerate(workers):
+                # A worker that never completed anything counts as idle.
+                idle = worker.last_completion_s is None or now - worker.last_completion_s >= threshold_s
+                if idle and worker.unfinished == 0 and not worker.probe_in_flight:
+                    worker.probe_in_flight = True
+                    # A task per probe, so a slow probe doesn't hold up the
+                    # check of the other worker.
+                    task = asyncio.create_task(probe(index))
+                    probes.add(task)
+                    task.add_done_callback(probes.discard)
+
     async def start_up() -> None:
         nonlocal health
-        health = "ok" if await warm_up() else "warm-up failed"
+        if not await warm_up():
+            health = "warm-up failed"
+            return
+        health = "ok"
+        if rule == "feedback":
+            await probe_loop()
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -176,9 +216,10 @@ def create_app(
         try:
             yield
         finally:
-            background.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await background
+            tasks = [background, *probes]
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             await client.aclose()
 
     app = FastAPI(lifespan=lifespan)

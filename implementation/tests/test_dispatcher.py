@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import dataclasses
+import time
 from contextlib import asynccontextmanager
 
 import anyio
@@ -285,3 +286,56 @@ async def test_weighted_round_robin_rule_uses_the_scenario_weights_from_config()
         replies = [await post(client, f"r{i}") for i in range(1, 9)]
 
     assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w1"] * 2
+
+
+def probe_calls(worker):
+    return [(headers, body) for headers, body in worker.calls if headers[protocol.PROBE] == "1"]
+
+
+async def test_feedback_rule_probes_an_idle_worker_once_after_t_and_the_probe_time_enters_the_estimate(tmp_path):
+    w1, w2 = FakeWorker(processing_ms="500.000"), FakeWorker(processing_ms="500.000")
+    config = make_config(warmup_count=1, probe_threshold_s=0.5, ewma_weight=0.5)
+    async with started(w1, w2, rule="feedback", config=config) as client:
+        await wait_for_health(client)
+        healthy_at = time.perf_counter()
+        w1.processing_ms = "100.000"  # the probe reply reports 100 ms
+        await wait_until(lambda: probe_calls(w1))
+        probe_after_s = time.perf_counter() - healthy_at
+        await asyncio.sleep(0.05)  # let the probe reply arrive
+        await post(client, "r1")
+        rows = await flush(client, tmp_path / "dispatcher.csv")
+
+    assert probe_after_s >= 0.4  # T is 0.5 s; warm-up ended just before healthy_at
+    (headers, body), = probe_calls(w1)
+    small = generate_image(config.images, 1, "small", 0)
+    assert (headers[protocol.REQUEST_ID], headers[protocol.IMAGE_ID]) == ("probe-w1-0", "small-00")
+    assert body == small.data
+    probe_row = next(r for r in rows if r["request_id"] == "probe-w1-0")
+    assert (probe_row["probe"], probe_row["warmup"], probe_row["select_ns"]) == ("1", "0", "")
+    assert (probe_row["chosen_worker"], probe_row["outcome"]) == ("w1", "success")
+    # 0.5 x 500 + 0.5 x 100 = 300
+    assert next(r for r in rows if r["request_id"] == "r1")["estimate_w1_ms"] == "300.000"
+
+
+async def test_feedback_rule_does_not_probe_a_worker_with_unfinished_requests():
+    w1, w2 = FakeWorker(), FakeWorker()
+    config = make_config(warmup_count=1, probe_threshold_s=0.2, timeout_ms=2000)
+    async with started(w1, w2, rule="feedback", config=config) as client:
+        await wait_for_health(client)
+        w1.delay_s = 0.8  # four times T with r1 unfinished on w1
+        reply = await post(client, "r1")
+
+    assert reply.headers[protocol.CHOSEN_WORKER] == "w1"
+    assert w1.request_ids() == ["warmup-w1-0", "r1"]
+    assert probe_calls(w2)  # the idle worker was probed meanwhile
+
+
+@pytest.mark.parametrize("rule", ["rr", "wrr", "lur"])
+async def test_no_probe_is_sent_under_the_other_rules(rule):
+    w1, w2 = FakeWorker(), FakeWorker()
+    async with started(w1, w2, rule=rule, config=make_config(warmup_count=1, probe_threshold_s=0.2)) as client:
+        await wait_for_health(client)
+        await asyncio.sleep(0.6)  # three times T
+
+    assert w1.request_ids() == ["warmup-w1-0"]
+    assert w2.request_ids() == ["warmup-w2-0"]
