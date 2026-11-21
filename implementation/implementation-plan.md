@@ -26,7 +26,7 @@ All recorded in `notes/decisions.md`.
 
 1. Create the three VMs in VirtualBox (dispatcher 1 GB, 1 vCPU; workers 2 GB, 1 vCPU each) on one host-only network.
 2. Write `implementation/setup/README.md` with VirtualBox, Ubuntu, kernel, cgroup, and Python versions. Pin packages in `requirements.txt`.
-3. Write a reset script: stop services, clear worker queues, reset dispatcher state, remove any quota, restart services. List in the README exactly what it resets.
+3. Reset by restarting the worker and dispatcher services, and apply or clear the quota for the scenario. List in the README exactly what this resets.
 4. Close other host applications during runs. Log host CPU with a simple sampler.
 
 ### Pilot (not part of the 180 main runs)
@@ -37,7 +37,7 @@ All recorded in `notes/decisions.md`.
 4. Bottleneck check. At the top rate, the load generator and dispatcher must keep up (achieved rate matches plan, their CPU well below full). Fix or disclose before main runs.
 5. Spread check. Repeat one condition 5 times and look at per-run p95. This tells us whether the "non-overlapping ranges" rule can show anything; if the spread is huge, say so in the paper rather than adding runs.
 6. Quota. Choose quota and period, apply, and confirm the cpu.stat throttling counters increase during a run.
-7. Feedback estimate. Choose the averaging method (window or EWMA) and its size. Fix it.
+7. Feedback estimate. The method is an EWMA of worker-reported processing time. Choose its weight and fix it.
 8. Run length, warm-up, and drain. Choose so 180 runs plus resets fit in weeks 4 to 5 with spare time.
 
 ### Weighted round-robin calibration
@@ -58,12 +58,12 @@ For each scenario, run a calibration with that scenario's image mix and measure 
 
 - One forwarding path: receive, select, forward with one shared HTTPX client and a fixed timeout, return. Only `select()` differs per rule.
 - Per-worker state: unfinished count, recent processing time estimate, last completion time, tie counter.
-- Unfinished count rises on assignment and falls on any terminal outcome (success, 503, error, timeout).
+- Unfinished count rises on assignment and falls on any terminal outcome (success, 503, expired, error, timeout).
 - Rules: round-robin; smooth weighted round-robin with the calibrated weights; least unfinished requests; feedback = smallest (unfinished + 1) × estimate.
 - Start-up: the same few warm-up requests to each worker before every run, for every rule, so all rules start from the same state.
-- Probe (feedback rule only): a worker with no completion for a fixed time gets one small fixed image. Probes are logged with a flag.
+- Probe (feedback rule only): a worker with no completion for a fixed time and nothing unfinished gets one small fixed image. Probes are logged with a flag.
 - No retries.
-- Log one CSV row per request: run id, rule, scenario, rate, request id, image id, size class, planned and actual send time, chosen worker, unfinished counts and estimates at decision time, select time, worker processing time, status, response time, probe flag.
+- Log one CSV row per request: run id, rule, scenario, rate, request id, image id, size class, chosen worker, unfinished counts and estimates at decision time, select time, worker processing time, status, probe and warm-up flags. Planned and actual send time and response time are in the load generator's log, joined on request id.
 
 ### Load generator (`implementation/experiments/`)
 
@@ -76,14 +76,14 @@ For each scenario, run a calibration with that scenario's image mix and measure 
 
 - psutil sampler on each VM writing CPU and RAM to CSV.
 - Dispatcher process CPU time at start and end of each run.
-- cpu.stat throttling counters before and after each scenario 3 run.
+- cpu.stat throttling counters before and after every run, in every scenario. They should change only in scenario 3.
 
 ### Tests (pytest)
 
 - Each rule on hand-made states, including Examples A and B from the defense guide section 7.4.
 - Weighted round-robin proportions over many picks.
 - Tie alternation.
-- Unfinished accounting under success, 503, error, and timeout.
+- Unfinished accounting under success, 503, expired, error, and timeout.
 - Worker output matches settings and is never cached.
 - One short end-to-end run through all four rules.
 
@@ -139,5 +139,6 @@ These were in the first version of this plan and are out of scope now. They can 
 | Host noise | Host CPU log shows other load, wide spread | Rerun that round; shuffled order limits bias |
 | All rules look the same | Ranges overlap everywhere | Report it; compare with H1 to H3 |
 | Feedback loses | Higher p95 than least unfinished | Report it with probe and select cost |
+| H2 not held for least unfinished requests | In scenario 3 its p95 is close to feedback, because the slowed worker's queue grows and the rule already sends it less | Report H2 as not held for that rule; it is a valid result |
 | Quota pauses dominate scenario 3 | High throttling counts, all rules poor | Report the counters and the period |
 | Schedule slips | Main runs unfinished by end of week 5 | Shorten run length set in the pilot; never cut rounds below five without saying so |

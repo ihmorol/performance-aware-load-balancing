@@ -2,7 +2,7 @@
 
 Written 2026-11-19 from a grilling session with the owner. It covers the work from an empty `implementation/` folder up to the point where the main runs can start: code and configuration frozen, the pilot done, and one short dry-run round passed. It follows `paper/revised-proposal.md` and `implementation/implementation-plan.md` and changes them only where the session settled something new. Those changes are listed in `notes/decisions.md`.
 
-Nothing here is built yet, and no number in this file is a measurement. Values the pilot decides are marked "pilot" with the rule the pilot uses. A few starting candidates are given so the pilot has somewhere to begin; they are guesses to be replaced, not results.
+When this was written nothing was built. Issue #2 (shared package and worker) has been merged since; the README in this folder lists what exists. No number in this file is a measurement. Values the pilot decides are marked "pilot" with the rule the pilot uses. A few starting candidates are given so the pilot has somewhere to begin; they are guesses to be replaced, not results.
 
 ## Problem statement
 
@@ -115,7 +115,7 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 - Pillow work runs in a thread. Only decode, resize, and encode are timed, with `time.perf_counter`.
 - No output caching.
 - A health endpoint that does no image work.
-- A per-request worker log (request id, arrival, queue wait, processing time, outcome: done, expired, rejected), held in memory and written to CSV when the orchestrator asks or the service stops.
+- A per-request worker log (request id, arrival, queue wait, processing time, outcome: done, expired, rejected), held in memory and written to CSV when the orchestrator asks or the service stops. Outcome `error` covers a body Pillow can't decode (500) and a budget header that isn't a number (400).
 
 ### Dispatcher
 
@@ -128,12 +128,14 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 - Least unfinished requests: the worker with fewer unfinished requests.
 - Feedback rule: the worker with the smaller (unfinished + 1) × estimate.
 - Ties in any rule alternate between workers using the tie counter.
-- EWMA: estimate = (1 − a) × estimate + a × newest processing time. Samples are worker-reported processing times from successful replies, warm-up replies, and probe replies. The weight a is a pilot value. The estimate is updated under every rule (it is cheap), but only the feedback rule reads it.
-- Warm-up: at start-up, before reporting healthy, the dispatcher sends the same K requests (one fixed medium image) to each worker. Their times seed the estimates. K is a pilot value. Warm-up requests are logged with a flag and never enter the summary.
+- EWMA: estimate = (1 − a) × estimate + a × newest processing time. A worker's first sample sets its estimate directly; the update applies from the second sample on. Starting from zero instead would leave the estimate far too low after a short warm-up (with a = 0.2 and three samples, about 49% of the true time). Samples are worker-reported processing times from successful replies, warm-up replies, and probe replies. The weight a is a pilot value. The estimate is updated under every rule (it is cheap), but only the feedback rule reads it.
+- Warm-up: at start-up, before reporting healthy, the dispatcher sends the same K requests (one fixed medium image) to each worker. Their times seed the estimates. If any warm-up request fails, the dispatcher stays unhealthy and the orchestrator marks the run failed. K is a pilot value. Warm-up requests are logged with a flag and never enter the summary.
 - Probe, feedback rule only: a background check looks at each worker. If a worker has had no completion for T seconds, has no unfinished requests, and has no probe in flight, the dispatcher sends one fixed small image. The probe counts as unfinished, its time enters the estimate, and it is logged with a probe flag. T is a pilot value.
 - No retries.
 - Dispatcher timeout D is fixed per run from config.
 - Dispatcher log, one row per request or probe: run id, rule, scenario, rate, request id, image id, size class, probe flag, warm-up flag, chosen worker, both unfinished counts and both estimates at decision time, select time in nanoseconds, worker processing time, worker status, outcome, time inside the dispatcher. Held in memory and written to CSV on the orchestrator's request and on shutdown.
+- Worker and dispatcher take the same flush request: `POST /admin/flush` with the JSON body `{"path": "<csv file>"}`.
+- The dispatcher is started with the run's rule, scenario, rate, and run id, because its log rows carry all four.
 - An admin endpoint returns the dispatcher's process CPU time, so the orchestrator can read it at the start and end of each run.
 
 ### Load generator
@@ -161,7 +163,7 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 - Steps for one run:
   1. Write a "started" row to the ledger.
   2. Apply the quota to worker 2 for scenario 3 with `systemctl set-property --runtime` (CPUQuota and CPUQuotaPeriodSec), or clear it for scenarios 1 and 2. Read the cgroup's cpu.max to confirm.
-  3. Restart both worker services, then the dispatcher service with the run's rule, scenario, weights, and run id. Wait until every health check passes. The dispatcher only reports healthy after its warm-up.
+  3. Restart both worker services, then the dispatcher service with the run's rule, scenario, rate, weights, and run id. Wait until every health check passes. The dispatcher only reports healthy after its warm-up.
   4. Read cpu.stat on both workers and the dispatcher CPU time. Start the samplers.
   5. Run the load generator with the saved schedule and wait for it to finish.
   6. Read cpu.stat and dispatcher CPU time again. Stop the samplers. Ask the dispatcher and workers to write their logs. Copy every file to the host.
@@ -266,7 +268,7 @@ Each slice ends with something runnable and tested. Slices 1 to 8 need only a la
 - Config tests: the main stage refuses unset values and a dirty working tree.
 - End to end: the orchestrator's local backend runs one short run per rule on localhost, and the summary computes.
 - The CPU quota can't be tested on localhost. It is checked in slice 9 on the VMs and again by the pilot's quota check.
-- There is no code in the repository yet, so there is no prior art for tests to follow.
+- When this was written there was no code, so no prior art for tests. Since issue #2, `implementation/tests/` is the prior art: the worker tests run the app in process through HTTPX `ASGITransport`.
 
 ## Out of scope
 
@@ -282,6 +284,7 @@ Each slice ends with something runnable and tested. Slices 1 to 8 need only a la
 - The host OS of the teammate's PC is not confirmed. On Windows, Python's asyncio timers wake in steps of about 15 ms, which is why the spin-wait switch exists. The pilot's send-accuracy check decides whether it is turned on.
 - Uploading image bytes means the 1 vCPU dispatcher handles every image twice (in and out). The pilot's bottleneck check has to show the dispatcher keeps up at the top rate. If it doesn't, the top rate comes down or the paper discloses it.
 - Weighted round-robin gets advance knowledge of the slowed worker through calibration, and the feedback rule has to learn it at run time. The paper states this.
+- Warm-up uses a medium image and probes use a small one, and both feed the same estimate as mixed traffic. A probe can make an idle worker look faster than it is for mixed images until real replies correct it. The paper states this too.
 - Four choices were made while writing this spec, not in the grilling session. The owner confirmed all four on 2026-11-19:
   - A probe also requires the worker to have no unfinished requests, since probing a worker that still holds work tells the dispatcher nothing new.
   - Schedules differ between rounds (same within a round), so the five-run spread includes different arrival sequences.
