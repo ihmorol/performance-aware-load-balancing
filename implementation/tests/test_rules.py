@@ -68,8 +68,8 @@ EQUAL = (WorkerView(unfinished=2, estimate_ms=150.0), WorkerView(unfinished=2, e
 
 @pytest.mark.parametrize("rule", RULES)
 def test_ties_alternate_under_every_rule(rule):
-    # Equal weights, equal unfinished counts, equal estimates: every pick is
-    # a tie for every rule. The first tie goes to w1.
+    # Every pick is a tie under rr, lur, and feedback; under wrr 1:1 the odd
+    # picks are. The first tie goes to w1.
     assert picks(rule, EQUAL, RuleState(weights=(1, 1)), 10) == [0, 1] * 5
 
 
