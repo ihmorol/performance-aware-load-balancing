@@ -8,7 +8,7 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 
 - `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), the seeded image set generator (`plb.images`), and the per-run summary (`plb.summary`).
 - `worker/`: the image processing service. Built.
-- `dispatcher/`: routing rules and the forwarding path. Not built yet.
+- `dispatcher/`: routing rules and the forwarding path. Built.
 - `experiments/`: the load generator is built. The orchestrator and pilot tools are not built yet. The per-run summary lives in `plb.summary`.
 - `setup/`: VM setup guide, systemd units, and scripts. Not built yet.
 - `config/dev.toml`: development values for localhost. They are not pilot results.
@@ -58,6 +58,22 @@ Add `--host 0.0.0.0` on a VM. The queue capacity comes from `worker.queue_capaci
 - `POST /admin/flush` with `{"path": "<csv file>"}` writes the per-request log (`request_id, arrival_unix_s, queue_wait_ms, processing_ms, outcome`). The worker also writes it to `--log` (default `local/worker-<port>.csv`) when it shuts down cleanly.
 
 Nothing is cached, so two identical requests cost the same work.
+
+## Dispatcher
+
+```bash
+python -m dispatcher --config config/dev.toml --rule rr --scenario 1 --rate 2 --run-id manual --port 8100
+```
+
+`--rule` is `rr`, `wrr`, `lur` (least unfinished requests), or `feedback`. Add `--host 0.0.0.0` on a VM. The workers in `addresses.workers` are called w1 and w2, in that order.
+
+- `POST /process` reads the whole body, picks a worker, and forwards the request with `X-Budget-Ms` set to the dispatcher timeout D. The reply carries the worker's body and `X-Outcome`, `X-Chosen-Worker`, and `X-Processing-Ms`.
+- Outcomes: a worker 200 is `success`, a worker 503 is passed back as `rejected`, and a worker 504 `expired` as `expired`. No reply within D gives 504 `timeout`, and a connection error or any other reply gives 502 `error`. Nothing is retried.
+- `GET /health` answers 503 until warm-up has succeeded, then 200.
+- `GET /admin/cpu` returns the dispatcher's process CPU time in seconds.
+- `POST /admin/flush` with `{"path": "<csv file>"}` writes the log, one row per request, warm-up request, and probe, with the columns in `plb.rows.DISPATCHER_LOG_COLUMNS`. The dispatcher also writes it to `--log` (default `local/dispatcher-<port>.csv`) when it shuts down cleanly.
+
+The rules, the EWMA estimate, warm-up, and probes follow the "Dispatcher" section of [spec.md](spec.md). On a tie, every rule picks the worker it did not pick last time, and the first tie goes to w1.
 
 ## Load generator and summary
 
