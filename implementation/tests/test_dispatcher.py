@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import dataclasses
 from contextlib import asynccontextmanager
 
 import anyio
@@ -8,7 +9,9 @@ import pytest
 from fastapi import FastAPI, Request, Response
 
 from dispatcher.app import create_app
+from dispatcher.rules import RULES
 from plb import protocol
+from plb.images import generate_image
 from plb.rows import DISPATCHER_LOG_COLUMNS
 from plb.config import (
     AddressesConfig, Config, DispatcherConfig, ImagesConfig, ResolutionsConfig, SeedsConfig, WeightsConfig,
@@ -225,3 +228,60 @@ async def test_a_failed_request_is_not_retried():
     assert [r.status_code for r in replies] == [502, 504, 502, 504]
     assert w1.request_ids() == ["r1", "r3"]
     assert w2.request_ids() == ["r2", "r4"]
+
+
+async def wait_for_health(client):
+    with anyio.fail_after(5):
+        while (await client.get("/health")).status_code != 200:
+            await asyncio.sleep(0.01)
+
+
+@pytest.mark.parametrize("rule", RULES)
+async def test_warm_up_sends_the_same_medium_image_to_each_worker_under_every_rule(tmp_path, rule):
+    w1 = FakeWorker(delay_s=0.05, processing_ms="100.000")
+    w2 = FakeWorker(delay_s=0.05, processing_ms="200.000")
+    # A long T keeps feedback probes out of this test.
+    config = make_config(warmup_count=3, probe_threshold_s=60.0)
+    async with started(w1, w2, rule=rule, config=config) as client:
+        before = await client.get("/health")
+        await wait_for_health(client)
+        await post(client, "r1")
+        rows = await flush(client, tmp_path / "dispatcher.csv")
+
+    assert before.status_code == 503
+    medium = generate_image(config.images, 1, "medium", 0)
+    for name, worker in (("w1", w1), ("w2", w2)):
+        assert worker.request_ids()[:3] == [f"warmup-{name}-0", f"warmup-{name}-1", f"warmup-{name}-2"]
+        for headers, body in worker.calls[:3]:
+            assert body == medium.data
+            assert (headers[protocol.IMAGE_ID], headers[protocol.SIZE_CLASS]) == ("medium-00", "medium")
+            assert (headers[protocol.BUDGET_MS], headers[protocol.PROBE]) == ("300", "0")
+    warmup_rows = [r for r in rows if r["warmup"] == "1"]
+    assert [r["chosen_worker"] for r in warmup_rows] == ["w1"] * 3 + ["w2"] * 3
+    assert all(r["select_ns"] == "" and r["outcome"] == "success" for r in warmup_rows)
+    # The warm-up times seeded the estimates the first request saw.
+    request_row = next(r for r in rows if r["request_id"] == "r1")
+    assert (request_row["estimate_w1_ms"], request_row["estimate_w2_ms"]) == ("100.000", "200.000")
+
+
+async def test_a_failed_warm_up_request_keeps_health_at_503(tmp_path):
+    w1, w2 = worker_that("succeeds"), worker_that("fails")
+    async with started(w1, w2, config=make_config(warmup_count=2)) as client:
+        await wait_until(lambda: len(w2.calls) == 2)
+        await asyncio.sleep(0.1)  # let the last warm-up reply arrive
+        rows = await flush(client, tmp_path / "dispatcher.csv")
+        health = await client.get("/health")
+
+    assert [r["outcome"] for r in rows] == ["success", "success", "error", "error"]
+    assert health.status_code == 503
+
+
+async def test_weighted_round_robin_rule_uses_the_scenario_weights_from_config():
+    config = dataclasses.replace(
+        make_config(), weights=WeightsConfig(scenario1=(1, 1), scenario2=(3, 1), scenario3=(1, 1)),
+    )
+    w1, w2 = FakeWorker(), FakeWorker()
+    async with started(w1, w2, rule="wrr", config=config, scenario=2) as client:
+        replies = [await post(client, f"r{i}") for i in range(1, 9)]
+
+    assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w1"] * 2

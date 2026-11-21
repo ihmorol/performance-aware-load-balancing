@@ -16,11 +16,13 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from dispatcher.rules import RuleState, WorkerView, select, update_estimate
 from plb import protocol
 from plb.config import Config
+from plb.images import generate_image
 from plb.rows import DISPATCHER_LOG_COLUMNS
 
 WORKER_NAMES = ("w1", "w2")
@@ -70,9 +72,12 @@ def create_app(
     tests, which put fake workers behind it.
     """
     workers = [WorkerState(url) for url in config.addresses.workers]
-    rule_state = RuleState()
+    # Weights are only read by weighted round-robin.
+    rule_state = RuleState(weights=getattr(config.weights, f"scenario{scenario}"))
     client: httpx.AsyncClient | None = None
     log: list[dict] = []
+    health = "warming up"  # then "ok", or "warm-up failed" for good
+    warmup_image = generate_image(config.images, config.seeds.image_set, "medium", 0)
 
     def snapshot() -> tuple[WorkerView, WorkerView]:
         return tuple(WorkerView(w.unfinished, w.estimate_ms) for w in workers)
@@ -139,13 +144,41 @@ def create_app(
             "dispatcher_ms": _ms((time.perf_counter() - start_s) * 1000),
         })
 
+    async def send_without_select(index: int, job: Job) -> Result:
+        """Forward a warm-up request or probe, which go to a fixed worker."""
+        start_s = time.perf_counter()
+        seen = snapshot()
+        result = await forward(index, job)
+        record(job, index, seen, None, result, start_s)
+        return result
+
+    async def warm_up() -> bool:
+        """Send K requests with the same medium image to each worker in turn."""
+        all_succeeded = True
+        for index, name in enumerate(WORKER_NAMES):
+            for n in range(config.dispatcher.warmup_count):
+                job = Job(f"warmup-{name}-{n}", warmup_image.image_id, warmup_image.size_class,
+                          warmup_image.data, warmup=True)
+                result = await send_without_select(index, job)
+                all_succeeded = all_succeeded and result.outcome == protocol.SUCCESS
+        return all_succeeded
+
+    async def start_up() -> None:
+        nonlocal health
+        health = "ok" if await warm_up() else "warm-up failed"
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         nonlocal client
         client = httpx.AsyncClient(transport=transport)
+        # Warm-up runs in the background so /health can answer meanwhile.
+        background = asyncio.create_task(start_up())
         try:
             yield
         finally:
+            background.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await background
             await client.aclose()
 
     app = FastAPI(lifespan=lifespan)
@@ -170,6 +203,11 @@ def create_app(
         result = await forward(index, job)
         record(job, index, seen, select_ns, result, start_s)
         return _reply(result, index)
+
+    @app.get("/health")
+    async def health_endpoint() -> JSONResponse:
+        # 200 only after every warm-up request succeeded.
+        return JSONResponse({"status": health}, status_code=200 if health == "ok" else 503)
 
     @app.post("/admin/flush")
     async def flush_endpoint(flush: FlushRequest) -> dict:
