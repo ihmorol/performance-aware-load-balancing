@@ -277,7 +277,7 @@ def test_run_folder_holds_the_schedule_the_log_and_the_run_parameters(tmp_path, 
         "target": url, "length_s": 1.0, "dropped_window_s": 0.2,
         "achieved_rate_tolerance": 0.05, "schedule_seed": "1:2:6.0:1",
     }
-    assert f"sent {len(rows)} requests" in capsys.readouterr().out
+    assert capsys.readouterr().out == f"sent {len(rows)} requests to {url}: {{'success': {len(rows)}}}\n"
 
 
 def test_changing_only_the_rule_keeps_the_schedule_and_changing_the_round_does_not(tmp_path):

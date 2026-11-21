@@ -9,7 +9,7 @@ Response time is counted from the planned send time, not the actual one.
         --rule rr --run-id manual --out local/run-manual
 
 The run folder gets schedule.csv (written before sending), generator.csv
-(one row per request), and loadgen.json (the run parameters the summary needs).
+(one row per request), and loadgen.json (the run parameters).
 """
 
 from __future__ import annotations
@@ -33,17 +33,6 @@ from plb.rows import GENERATOR_LOG_COLUMNS
 # With spin-wait on, the sender sleeps until this long before the planned
 # time and then busy-waits.
 SPIN_MARGIN_S = 0.020
-
-OUTCOMES = (protocol.SUCCESS, protocol.REJECTED, protocol.EXPIRED, protocol.TIMEOUT, protocol.ERROR)
-
-# Config values every run needs. The mix is only needed in scenarios 2 and 3.
-NEEDED_KEYS = (
-    "generator.timeout_ms", "generator.spin_wait",
-    "run.length_s", "run.dropped_window_s", "run.achieved_rate_tolerance",
-    "images.per_class", "images.resolutions.small", "images.resolutions.medium",
-    "images.resolutions.large", "seeds.image_set", "seeds.schedule",
-)
-MIX_KEYS = ("images.mix.small", "images.mix.medium", "images.mix.large")
 
 
 async def send_schedule(target: str, run_id: str, schedule: list[PlannedRequest],
@@ -132,13 +121,6 @@ def write_generator_log(rows: list[dict], path: str | Path) -> None:
         writer.writerows(rows)
 
 
-def _config_value(config: object, key: str) -> object:
-    value = config
-    for part in key.split("."):
-        value = getattr(value, part)
-    return value
-
-
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Send one run's seeded open-loop schedule.")
     parser.add_argument("--config", required=True, help="config TOML file")
@@ -152,14 +134,32 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
-    needed = NEEDED_KEYS + (MIX_KEYS if args.scenario != 1 else ())
-    unset = [key for key in needed if _config_value(config, key) is None]
+    images = config.images
+    needed = {
+        "generator.timeout_ms": config.generator.timeout_ms,
+        "generator.spin_wait": config.generator.spin_wait,
+        "run.length_s": config.run.length_s,
+        "run.dropped_window_s": config.run.dropped_window_s,
+        "run.achieved_rate_tolerance": config.run.achieved_rate_tolerance,
+        "images.per_class": images.per_class,
+        "images.resolutions.small": images.resolutions.small,
+        "images.resolutions.medium": images.resolutions.medium,
+        "images.resolutions.large": images.resolutions.large,
+        "seeds.image_set": config.seeds.image_set,
+        "seeds.schedule": config.seeds.schedule,
+    }
+    if args.scenario != 1:
+        needed["images.mix.small"] = images.mix.small
+        needed["images.mix.medium"] = images.mix.medium
+        needed["images.mix.large"] = images.mix.large
+    unset = [k for k, v in needed.items() if v is None]
     if unset:
         parser.error(f"unset in the config: {', '.join(unset)}")
 
     seed = schedule_seed(config.seeds.schedule, args.scenario, args.rate, args.round)
-    schedule = build_schedule(seed, args.scenario, args.rate, config.run.length_s, config.images)
+    schedule = build_schedule(seed, args.scenario, args.rate, config.run.length_s, images)
     out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
     write_schedule_csv(schedule, out / "schedule.csv")
     run_info = {
         "run_id": args.run_id,
@@ -175,14 +175,13 @@ def main(argv: list[str] | None = None) -> None:
     }
     (out / "loadgen.json").write_text(json.dumps(run_info, indent=2) + "\n", encoding="utf-8")
 
-    bodies = {image.image_id: image.data for image in generate_image_set(config.images, config.seeds.image_set)}
+    bodies = {image.image_id: image.data for image in generate_image_set(images, config.seeds.image_set)}
     rows = asyncio.run(send_schedule(args.target, args.run_id, schedule, bodies,
                                      config.generator.timeout_ms / 1000, config.generator.spin_wait))
     write_generator_log(rows, out / "generator.csv")
 
-    counts = Counter(row["outcome"] for row in rows)
-    print(f"sent {len(rows)} requests to {args.target}: "
-          + ", ".join(f"{outcome} {counts[outcome]}" for outcome in OUTCOMES))
+    counts = dict(Counter(row["outcome"] for row in rows))
+    print(f"sent {len(rows)} requests to {args.target}: {counts}")
 
 
 if __name__ == "__main__":

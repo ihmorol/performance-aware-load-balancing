@@ -69,7 +69,6 @@ def _size_class(rng: random.Random, scenario: int, images: ImagesConfig) -> str:
 
 def write_schedule_csv(schedule: list[PlannedRequest], path: str | Path) -> None:
     """Write the schedule as CSV. The same schedule always gives the same bytes."""
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(SCHEDULE_COLUMNS)
