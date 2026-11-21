@@ -116,8 +116,9 @@ async def test_with_spin_wait_requests_go_out_on_time_and_never_early():
     lags = sorted(float(r["send_lag_ms"]) for r in rows)
     assert [r["outcome"] for r in rows] == ["success"] * 12
     assert lags[0] >= 0
-    # A plain asyncio sleep is often 10 ms or more off on Windows.
-    assert lags[len(lags) // 2] < 1.0
+    # Spin-wait measured about 0.002 ms here and a plain asyncio sleep 7 to 23 ms,
+    # so 3 ms still tells them apart and leaves room for a busy machine.
+    assert lags[len(lags) // 2] < 3.0
 
 
 @pytest.mark.anyio
