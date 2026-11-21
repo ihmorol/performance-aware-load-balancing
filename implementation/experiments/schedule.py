@@ -45,7 +45,6 @@ def build_schedule(seed: str, scenario: int, rate: float, length_s: float,
     schedule = []
     offset = 0.0
     while True:
-        # The draws always come in this order: gap, size class, image index.
         offset += rng.expovariate(rate)
         if offset >= length_s:
             return schedule
@@ -60,7 +59,6 @@ def build_schedule(seed: str, scenario: int, rate: float, length_s: float,
 
 
 def _size_class(rng: random.Random, scenario: int, images: ImagesConfig) -> str:
-    # Scenario 1 uses only the medium class.
     if scenario == 1:
         return "medium"
     mix = images.mix
