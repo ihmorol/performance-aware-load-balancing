@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import json
 import socket
 import threading
 import time
@@ -9,8 +11,10 @@ import pytest
 import uvicorn
 from fastapi import FastAPI, Request, Response
 
+from experiments.loadgen import main as loadgen_main
 from experiments.loadgen import send_schedule
 from experiments.schedule import PlannedRequest
+from plb.rows import GENERATOR_LOG_COLUMNS
 
 
 def stub_app(delay_s, status=200, headers=None):
@@ -185,3 +189,94 @@ async def test_a_refused_connection_is_an_error_and_the_run_ends():
 
     assert row["outcome"] == "error"
     assert row["status"] == ""
+
+
+# Small images and a 1 s run keep the command line tests quick.
+TEST_CONFIG = """
+stage = "pilot"
+
+[generator]
+timeout_ms = 2000
+spin_wait = false
+
+[run]
+length_s = 1.0
+dropped_window_s = 0.2
+achieved_rate_tolerance = 0.05
+
+[images]
+per_class = 2
+
+[images.resolutions]
+small = [32, 24]
+medium = [48, 32]
+large = [64, 48]
+
+[images.mix]
+small = 0.4
+medium = 0.4
+large = 0.2
+
+[seeds]
+image_set = 1
+schedule = 1
+"""
+
+
+def run_loadgen(tmp_path, url, out, rule="rr", round_number=1, config_text=TEST_CONFIG):
+    config_path = tmp_path / "test.toml"
+    config_path.write_text(config_text, encoding="utf-8")
+    loadgen_main([
+        "--config", str(config_path), "--target", url, "--scenario", "2", "--rate", "6",
+        "--round", str(round_number), "--rule", rule, "--run-id", "cli-run", "--out", str(out),
+    ])
+    return out
+
+
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def test_run_folder_holds_the_schedule_the_log_and_the_run_parameters(tmp_path, capsys):
+    with serving(stub_app(delay_s=0)) as url:
+        out = run_loadgen(tmp_path, url, tmp_path / "run")
+
+    schedule = read_csv(out / "schedule.csv")
+    rows = read_csv(out / "generator.csv")
+    with open(out / "generator.csv", newline="", encoding="utf-8") as f:
+        header = next(csv.reader(f))
+    info = json.loads((out / "loadgen.json").read_text(encoding="utf-8"))
+
+    assert len(schedule) > 0
+    assert header == list(GENERATOR_LOG_COLUMNS)
+    assert [r["request_id"] for r in rows] == [s["request_id"] for s in schedule]
+    assert {r["outcome"] for r in rows} == {"success"}
+    assert {r["run_id"] for r in rows} == {"cli-run"}
+    assert info == {
+        "run_id": "cli-run", "rule": "rr", "scenario": 2, "rate": 6.0, "round": 1,
+        "target": url, "length_s": 1.0, "dropped_window_s": 0.2,
+        "achieved_rate_tolerance": 0.05, "schedule_seed": "1:2:6.0:1",
+    }
+    assert f"sent {len(rows)} requests" in capsys.readouterr().out
+
+
+def test_changing_only_the_rule_keeps_the_schedule_and_changing_the_round_does_not(tmp_path):
+    with serving(stub_app(delay_s=0)) as url:
+        rr = run_loadgen(tmp_path, url, tmp_path / "rr", rule="rr")
+        lur = run_loadgen(tmp_path, url, tmp_path / "lur", rule="lur")
+        round_2 = run_loadgen(tmp_path, url, tmp_path / "round-2", rule="rr", round_number=2)
+
+    rr_bytes = (rr / "schedule.csv").read_bytes()
+    assert len(read_csv(rr / "schedule.csv")) > 0
+    assert (lur / "schedule.csv").read_bytes() == rr_bytes
+    assert (round_2 / "schedule.csv").read_bytes() != rr_bytes
+
+
+def test_an_unset_config_value_stops_the_run_before_sending(tmp_path, capsys):
+    config_text = TEST_CONFIG.replace("timeout_ms = 2000\n", "")
+    with pytest.raises(SystemExit):
+        run_loadgen(tmp_path, "http://127.0.0.1:9/process", tmp_path / "run", config_text=config_text)
+
+    assert "generator.timeout_ms" in capsys.readouterr().err
+    assert not (tmp_path / "run").exists()

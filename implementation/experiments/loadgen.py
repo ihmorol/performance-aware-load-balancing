@@ -3,21 +3,47 @@
 Every planned request gets its own asyncio task, which sleeps until the
 planned time and then sends, whether or not earlier replies have arrived.
 Response time is counted from the planned send time, not the actual one.
+
+    python -m experiments.loadgen --config config/dev.toml \\
+        --target http://127.0.0.1:8100/process --scenario 2 --rate 2 --round 1 \\
+        --rule rr --run-id manual --out local/run-manual
+
+The run folder gets schedule.csv (written before sending), generator.csv
+(one row per request), and loadgen.json (the run parameters the summary needs).
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import csv
+import json
 import time
+from collections import Counter
+from pathlib import Path
 
 import httpx
 
-from experiments.schedule import PlannedRequest
+from experiments.schedule import PlannedRequest, build_schedule, schedule_seed, write_schedule_csv
 from plb import protocol
+from plb.config import load_config
+from plb.images import generate_image_set
+from plb.rows import GENERATOR_LOG_COLUMNS
 
 # With spin-wait on, the sender sleeps until this long before the planned
 # time and then busy-waits.
 SPIN_MARGIN_S = 0.020
+
+OUTCOMES = (protocol.SUCCESS, protocol.REJECTED, protocol.EXPIRED, protocol.TIMEOUT, protocol.ERROR)
+
+# Config values every run needs. The mix is only needed in scenarios 2 and 3.
+NEEDED_KEYS = (
+    "generator.timeout_ms", "generator.spin_wait",
+    "run.length_s", "run.dropped_window_s", "run.achieved_rate_tolerance",
+    "images.per_class", "images.resolutions.small", "images.resolutions.medium",
+    "images.resolutions.large", "seeds.image_set", "seeds.schedule",
+)
+MIX_KEYS = ("images.mix.small", "images.mix.medium", "images.mix.large")
 
 
 async def send_schedule(target: str, run_id: str, schedule: list[PlannedRequest],
@@ -101,3 +127,67 @@ def reply_outcome(reply: httpx.Response) -> str:
             return protocol.EXPIRED
         return protocol.TIMEOUT
     return protocol.ERROR
+
+
+def write_generator_log(rows: list[dict], path: str | Path) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=GENERATOR_LOG_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _config_value(config: object, key: str) -> object:
+    value = config
+    for part in key.split("."):
+        value = getattr(value, part)
+    return value
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Send one run's seeded open-loop schedule.")
+    parser.add_argument("--config", required=True, help="config TOML file")
+    parser.add_argument("--target", required=True, help="URL to POST to, such as http://127.0.0.1:8100/process")
+    parser.add_argument("--scenario", type=int, required=True, choices=(1, 2, 3))
+    parser.add_argument("--rate", type=float, required=True, help="requests per second")
+    parser.add_argument("--round", type=int, required=True)
+    parser.add_argument("--rule", required=True, help="the rule under test; recorded only")
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--out", required=True, help="run folder")
+    args = parser.parse_args(argv)
+
+    config = load_config(args.config)
+    needed = NEEDED_KEYS + (MIX_KEYS if args.scenario != 1 else ())
+    unset = [key for key in needed if _config_value(config, key) is None]
+    if unset:
+        parser.error(f"unset in the config: {', '.join(unset)}")
+
+    seed = schedule_seed(config.seeds.schedule, args.scenario, args.rate, args.round)
+    schedule = build_schedule(seed, args.scenario, args.rate, config.run.length_s, config.images)
+    out = Path(args.out)
+    write_schedule_csv(schedule, out / "schedule.csv")
+    run_info = {
+        "run_id": args.run_id,
+        "rule": args.rule,
+        "scenario": args.scenario,
+        "rate": args.rate,
+        "round": args.round,
+        "target": args.target,
+        "length_s": config.run.length_s,
+        "dropped_window_s": config.run.dropped_window_s,
+        "achieved_rate_tolerance": config.run.achieved_rate_tolerance,
+        "schedule_seed": seed,
+    }
+    (out / "loadgen.json").write_text(json.dumps(run_info, indent=2) + "\n", encoding="utf-8")
+
+    bodies = {image.image_id: image.data for image in generate_image_set(config.images, config.seeds.image_set)}
+    rows = asyncio.run(send_schedule(args.target, args.run_id, schedule, bodies,
+                                     config.generator.timeout_ms / 1000, config.generator.spin_wait))
+    write_generator_log(rows, out / "generator.csv")
+
+    counts = Counter(row["outcome"] for row in rows)
+    print(f"sent {len(rows)} requests to {args.target}: "
+          + ", ".join(f"{outcome} {counts[outcome]}" for outcome in OUTCOMES))
+
+
+if __name__ == "__main__":
+    main()
