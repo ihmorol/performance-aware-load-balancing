@@ -6,10 +6,10 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 
 ## Layout
 
-- `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), and the seeded image set generator (`plb.images`).
+- `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), the seeded image set generator (`plb.images`), and the per-run summary (`plb.summary`).
 - `worker/`: the image processing service. Built.
 - `dispatcher/`: routing rules and the forwarding path. Built.
-- `experiments/`: load generator, orchestrator, pilot tools, and the per-run summary. Not built yet.
+- `experiments/`: the load generator is built. The orchestrator and pilot tools are not built yet. The per-run summary lives in `plb.summary`.
 - `setup/`: VM setup guide, systemd units, and scripts. Not built yet.
 - `config/dev.toml`: development values for localhost. They are not pilot results.
 - `tests/`: the test suite.
@@ -76,6 +76,36 @@ python -m dispatcher --config config/dev.toml --rule rr --scenario 1 --rate 2 --
 - Probes, feedback rule only: every T/4 seconds the dispatcher checks each worker. A worker with no completion for T seconds, nothing unfinished, and no probe in flight gets one small image (`small-00`) with `X-Probe: 1`. The probe counts as unfinished and its time enters the estimate. The other rules never probe.
 - `GET /admin/cpu` returns `{"cpu_s": ...}`, the dispatcher's process CPU time in seconds.
 - `POST /admin/flush` with `{"path": "<csv file>"}` writes the log, the same request the worker takes. There is one row per request, warm-up request, and probe, with the columns in `plb.rows.DISPATCHER_LOG_COLUMNS`. The unfinished counts and estimates in a row are the values seen just before the choice. `select_ns` is the time `select()` took and is empty for warm-up requests and probes, which go to a fixed worker. `dispatcher_ms` runs from the moment the request body has been read to the reply. The log is also written to `--log` (default `local/dispatcher-<port>.csv`) when the dispatcher shuts down cleanly.
+
+## Load generator and summary
+
+```bash
+python -m experiments.loadgen --config config/dev.toml --target http://127.0.0.1:8101/process \
+    --scenario 2 --rate 2 --round 1 --rule rr --run-id manual --out local/run-manual
+python -m plb.summary --run-dir local/run-manual
+```
+
+The target takes the same POST as the worker's `/process`, so a worker can stand in for the dispatcher during manual checks.
+
+- The schedule is Poisson arrivals (exponential gaps) at `--rate` over `run.length_s`, with an image per request. Scenario 1 uses only medium images; scenarios 2 and 3 pick the class from `images.mix`. The seed is a string made from `seeds.schedule`, the scenario, the rate, and the round. The rule is not part of it, so every rule in one round, scenario, and rate gets the same schedule.
+- Sending is open loop. Each request has its own asyncio task that sends at the planned time whether or not earlier replies have come back, and the HTTPX client has no connection limit. With `generator.spin_wait` on, a task sleeps until 20 ms before its planned time and then busy-waits.
+- Each request carries `X-Request-Id`, `X-Image-Id`, and `X-Size-Class`, with the image bytes as the body. The images are drawn in memory from `seeds.image_set`.
+- A request with no reply within `generator.timeout_ms` is a timeout. The run ends when every request has an outcome. A 200 is success, 503 is rejected, 504 with `X-Outcome: expired` is expired, any other 504 is timeout, and any other status or a connection error is error.
+- Response time is the time the reply arrived (or the timeout fired) minus the planned send time. Send lag is the actual send time minus the planned one.
+
+The run folder gets three files from the generator. `schedule.csv` (`request_id, planned_offset_s, image_id, size_class`) is written before sending, and the same seed always gives the same bytes. `generator.csv` has one row per request with the columns in `plb.rows.GENERATOR_LOG_COLUMNS`. Chosen worker, processing time, and output size come from the reply headers and stay empty when the reply has none. `loadgen.json` holds the run parameters: run id, rule, scenario, rate, round, target, run length, dropped window, tolerance, and the schedule seed.
+
+`plb.summary` reads only `generator.csv` and `loadgen.json` and writes `summary.json`. The measured window is every request planned at or after `run.dropped_window_s` (W), and its length is the run length minus W.
+
+- `measured` and `successes` count requests in the measured window.
+- `mean_ms` and `p95_ms` cover successful requests only. p95 is the nearest rank: sort, then take the value at position ceil(0.95 × n).
+- `p95_by_class_ms` gives p95 for small, medium, and large in scenarios 2 and 3, and is null in scenario 1.
+- `throughput` is successes divided by the window length, shown next to `offered_rate`, the run's `--rate`.
+- `failures` counts rejected, expired, timeout, and error.
+- `planned_rate` counts requests planned in the window and `achieved_rate` counts requests actually sent in the window, both divided by its length. `rate_flag` is true when the two differ by more than `run.achieved_rate_tolerance` of the planned rate. Comparing with the schedule instead of the offered rate means the random spread of a Poisson schedule never sets the flag. The flag is also true when nothing was planned in the window.
+- `max_send_lag_ms` is the largest send lag in the window.
+
+A value that can't be computed, such as p95 with no successes, is null.
 
 ## Before running experiments
 
