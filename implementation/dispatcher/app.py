@@ -68,12 +68,15 @@ def create_app(
     rate: float,
     run_id: str,
     transport: httpx.AsyncBaseTransport | None = None,
+    shutdown_log_path: str | Path | None = None,
 ) -> FastAPI:
     """Build a dispatcher app.
 
     The worker addresses, timeout, EWMA weight, probe threshold, warm-up
-    count, and the scenario's weights come from config. transport is for
-    tests, which put fake workers behind it.
+    count, and the scenario's weights come from config. rule is one of
+    RULES. scenario, rate, and run_id go into every log row. transport is
+    for tests, which put fake workers behind it. When shutdown_log_path is
+    given, the log is written there on shutdown.
     """
     workers = [WorkerState(url) for url in config.addresses.workers]
     # Weights are only read by weighted round-robin.
@@ -221,6 +224,8 @@ def create_app(
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await client.aclose()
+            if shutdown_log_path is not None:
+                write_log(log, shutdown_log_path)
 
     app = FastAPI(lifespan=lifespan)
 
@@ -254,6 +259,11 @@ def create_app(
     async def flush_endpoint(flush: FlushRequest) -> dict:
         write_log(log, flush.path)
         return {"path": flush.path, "rows": len(log)}
+
+    @app.get("/admin/cpu")
+    async def cpu_endpoint() -> dict:
+        # CPU time of this process, read at the start and end of each run.
+        return {"cpu_s": time.process_time()}
 
     return app
 

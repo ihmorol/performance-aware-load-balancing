@@ -339,3 +339,20 @@ async def test_no_probe_is_sent_under_the_other_rules(rule):
 
     assert w1.request_ids() == ["warmup-w1-0"]
     assert w2.request_ids() == ["warmup-w2-0"]
+
+
+async def test_admin_cpu_returns_the_process_cpu_time_in_seconds():
+    async with started(FakeWorker(), FakeWorker()) as client:
+        first = (await client.get("/admin/cpu")).json()["cpu_s"]
+        sum(range(3_000_000))  # spend some CPU
+        second = (await client.get("/admin/cpu")).json()["cpu_s"]
+
+    assert 0 < first < second
+
+
+async def test_log_is_written_on_shutdown(tmp_path):
+    path = tmp_path / "shutdown.csv"
+    async with started(FakeWorker(), FakeWorker(), shutdown_log_path=path) as client:
+        await post(client, "r1")
+
+    assert [(r["request_id"], r["outcome"]) for r in read_rows(path)] == [("r1", "success")]
