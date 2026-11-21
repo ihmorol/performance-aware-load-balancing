@@ -104,8 +104,8 @@ def create_app(
         # Counted from assignment until any outcome, timeout and errors too.
         worker.unfinished += 1
         try:
-            # wait_for enforces D. The HTTPX timeout is not enough on its
-            # own: the in-process transport the tests use ignores it.
+            # wait_for enforces D. The client has no HTTPX timeout, and the
+            # in-process transport the tests use would ignore one anyway.
             reply = await asyncio.wait_for(
                 client.post(worker.url + "/process", content=job.body, headers=headers),
                 timeout=config.dispatcher.timeout_ms / 1000,
