@@ -2,10 +2,8 @@
 
     python -m dispatcher --config config/dev.toml --rule rr --scenario 1 --rate 2 --run-id manual --port 8100
 
-The worker addresses come from addresses.workers, the timeout, EWMA weight,
-probe threshold, and warm-up count from the dispatcher section, and the
-weights from weights.scenario<N>. The log is written to --log when the
-service stops (default local/dispatcher-<port>.csv).
+The log is written to --log when the service stops (default
+local/dispatcher-<port>.csv).
 """
 
 import argparse
