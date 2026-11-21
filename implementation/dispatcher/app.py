@@ -123,10 +123,13 @@ def create_app(
             return Result(protocol.EXPIRED, 504, reply)
         if reply.status_code != 200:
             return Result(protocol.ERROR, 502, reply)
+        try:
+            processing_ms = float(reply.headers[protocol.PROCESSING_MS])
+        except (KeyError, ValueError):
+            # A 200 without a usable processing time is an error too.
+            return Result(protocol.ERROR, 502, reply)
         # Updated under every rule, though only the feedback rule reads it.
-        worker.estimate_ms = update_estimate(
-            worker.estimate_ms, float(reply.headers[protocol.PROCESSING_MS]), config.dispatcher.ewma_weight,
-        )
+        worker.estimate_ms = update_estimate(worker.estimate_ms, processing_ms, config.dispatcher.ewma_weight)
         worker.last_completion_s = time.perf_counter()
         return Result(protocol.SUCCESS, 200, reply)
 

@@ -56,7 +56,8 @@ class FakeWorker:
         await asyncio.sleep(self.delay_s)
         headers = {protocol.OUTCOME: self.outcome}
         if self.status == 200:
-            headers[protocol.PROCESSING_MS] = self.processing_ms
+            if self.processing_ms is not None:
+                headers[protocol.PROCESSING_MS] = self.processing_ms
             headers[protocol.OUTPUT_BYTES] = "3"
             return Response(b"out", status_code=200, headers=headers, media_type="image/jpeg")
         return Response(status_code=self.status, headers=headers)
@@ -219,6 +220,21 @@ async def test_outcome_is_passed_back_and_the_unfinished_count_returns_to_0(
     assert (r1["outcome"], r1["worker_status"]) == (outcome, worker_status)
     # r2's row holds the counts seen when r2 was assigned, after r1 ended.
     assert (r2["unfinished_w1"], r2["unfinished_w2"]) == ("0", "0")
+
+
+@pytest.mark.parametrize("processing_ms", [None, "abc"])
+async def test_a_200_reply_without_a_usable_processing_time_is_an_error_with_a_log_row(tmp_path, processing_ms):
+    w1, w2 = FakeWorker(processing_ms=processing_ms), FakeWorker()
+    async with started(w1, w2) as client:
+        reply = await post(client, "r1")
+        await post(client, "r2")
+        rows = await flush(client, tmp_path / "dispatcher.csv")
+
+    assert reply.status_code == 502
+    assert reply.headers[protocol.OUTCOME] == protocol.ERROR
+    r1, r2 = rows
+    assert (r1["request_id"], r1["outcome"], r1["worker_status"]) == ("r1", "error", "200")
+    assert r2["estimate_w1_ms"] == ""  # the reply did not feed the estimate
 
 
 async def test_a_failed_request_is_not_retried():
