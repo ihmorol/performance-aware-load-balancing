@@ -122,6 +122,17 @@ async def test_with_spin_wait_requests_go_out_on_time_and_never_early():
 
 
 @pytest.mark.anyio
+async def test_without_spin_wait_no_request_is_sent_before_its_planned_time():
+    offsets = [0.013 + 0.047 * i for i in range(12)]
+    with serving(stub_app(delay_s=0)) as url:
+        with anyio.fail_after(5):
+            rows = await send(url, hand_schedule(*offsets), spin_wait=False)
+
+    early = [(r["request_id"], r["send_lag_ms"]) for r in rows if float(r["send_lag_ms"]) < 0]
+    assert early == []
+
+
+@pytest.mark.anyio
 async def test_no_reply_within_the_generator_timeout_is_a_timeout_and_the_run_ends():
     with serving(stub_app(delay_s=5.0)) as url:
         with anyio.fail_after(3):
