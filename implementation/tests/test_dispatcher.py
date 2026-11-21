@@ -304,6 +304,14 @@ async def test_weighted_round_robin_rule_uses_the_scenario_weights_from_config()
     assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w1"] * 2
 
 
+async def test_round_robin_rule_runs_without_weights_in_the_config():
+    config = dataclasses.replace(make_config(), weights=WeightsConfig())
+    async with started(FakeWorker(), FakeWorker(), rule="rr", config=config) as client:
+        replies = [await post(client, f"r{i}") for i in range(1, 5)]
+
+    assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w2"]
+
+
 def probe_calls(worker):
     return [(headers, body) for headers, body in worker.calls if headers[protocol.PROBE] == "1"]
 

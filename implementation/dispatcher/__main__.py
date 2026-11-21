@@ -37,11 +37,14 @@ def main(argv: list[str] | None = None) -> None:
         "dispatcher.ewma_weight": config.dispatcher.ewma_weight,
         "dispatcher.probe_threshold_s": config.dispatcher.probe_threshold_s,
         "dispatcher.warmup_count": config.dispatcher.warmup_count,
-        f"weights.scenario{args.scenario}": getattr(config.weights, f"scenario{args.scenario}"),
         "images.resolutions.medium": config.images.resolutions.medium,
         "images.resolutions.small": config.images.resolutions.small,
         "seeds.image_set": config.seeds.image_set,
     }
+    # Only weighted round-robin reads the weights. The pilot may run the
+    # other rules before calibration has set them.
+    if args.rule == "wrr":
+        needed[f"weights.scenario{args.scenario}"] = getattr(config.weights, f"scenario{args.scenario}")
     unset = [key for key, value in needed.items() if value is None]
     if unset:
         parser.error(f"unset in the config: {', '.join(unset)}")
