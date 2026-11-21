@@ -1,6 +1,6 @@
 # Implementation workspace
 
-The planned system, per the proposal: one dispatcher VM (1 GB RAM, 1 vCPU) and two worker VMs (2 GB RAM, 1 vCPU each), all Ubuntu Server, running locally. Workers process image resize and recompression jobs. The dispatcher picks a worker by one of four rules: round-robin, weighted round-robin, least connections, or recent processing time feedback.
+The planned system, per the proposal: one dispatcher VM (1 GB RAM, 1 vCPU) and two worker VMs (2 GB RAM, 1 vCPU each), all Ubuntu Server, running locally. Workers process image resize and recompression jobs. The dispatcher picks a worker by one of four rules: round-robin, weighted round-robin, least unfinished requests (least connections counted in requests), or recent processing time feedback.
 
 The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHESTRATION.md).
 
@@ -61,4 +61,4 @@ Nothing is cached, so two identical requests cost the same work.
 
 ## Before running experiments
 
-Work through [notes/open-questions.md](../notes/open-questions.md) first. It lists every parameter the proposal left open: request rates, run duration, image set, weights, averaging window, CPU quota, queue limits, timeouts. Decide each one before the main runs and record the choice in `notes/decisions.md`. Do not tune settings after seeing results.
+Work through [notes/open-questions.md](../notes/open-questions.md) first. It lists every parameter the proposal left open, with the method already settled and the value the pilot still has to fix: request rates, run length, image classes, weights, EWMA weight, CPU quota, queue capacity, timeouts. Record each value in `notes/decisions.md` and in the config before the main runs. Do not tune settings after seeing results.

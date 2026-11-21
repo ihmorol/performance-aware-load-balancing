@@ -9,7 +9,10 @@ description = "Dispatcher, workers, and experiment tools for the performance-awa
 requires-python = ">=3.12,<3.13"
 
 [tool.setuptools.packages.find]
-include = ["plb*", "worker*"]
+# dispatcher (#3) and experiments (#4) are listed before they exist, so the two
+# wave 2 branches don't both edit this line. Rerun `pip install -e . --no-deps`
+# after a new package folder appears.
+include = ["plb*", "worker*", "dispatcher*", "experiments*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

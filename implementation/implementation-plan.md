@@ -2,6 +2,8 @@
 
 Updated 2026-11-19 after the owner's scope review. This plan builds what `paper/revised-proposal.md` describes and nothing more. Audit items (A1 to C9) are in `notes/proposal-audit.md`, with a keep, simplify, or drop status for each. Nothing is built yet, and no value here is a measured result. Where a number is still open, the plan says how the pilot decides it.
 
+The grilling session later the same day produced `implementation/spec.md`, which settles many details this plan leaves open (expired requests, the generator log, cpu.stat in every scenario, the real order of work). Where the two differ, the spec wins. Since 2026-11-19 the worker and shared package are built (issue #2); the rest is not.
+
 The weeks follow slide 4: week 1 pilot, weeks 2 to 3 implementation, weeks 4 to 5 main runs, week 6 analysis, weeks 7 to 8 report and demo.
 
 ## Decisions already made
