@@ -18,15 +18,23 @@ from plb.rows import GENERATOR_LOG_COLUMNS
 
 
 def stub_app(delay_s, status=200, headers=None):
-    """A target that waits delay_s before each reply and records arrivals."""
+    """A target that waits delay_s before each reply.
+
+    It records perf_counter times, which the sender's clock shares because
+    the stub runs in the same process.
+    """
     app = FastAPI()
     app.state.arrivals = []
+    app.state.arrived_at = []
+    app.state.replied_at = []
 
     @app.post("/process")
     async def process(request: Request) -> Response:
+        app.state.arrived_at.append(time.perf_counter())
         app.state.arrivals.append(dict(request.headers))
         await request.body()
         await asyncio.sleep(delay_s)
+        app.state.replied_at.append(time.perf_counter())
         return Response(content=b"output", status_code=status, headers=headers)
 
     return app
@@ -70,17 +78,16 @@ def send(url, schedule, timeout_s=10.0, spin_wait=False):
 
 @pytest.mark.anyio
 async def test_every_request_in_the_first_2_s_is_sent_before_the_first_reply():
-    with serving(stub_app(delay_s=2.0)) as url:
+    app = stub_app(delay_s=2.0)
+    with serving(app) as url:
         with anyio.fail_after(10):
             rows = await send(url, hand_schedule(0.0, 0.5, 1.0, 1.5))
 
-    first_reply_s = min(float(r["planned_offset_s"]) + float(r["response_ms"]) / 1000 for r in rows)
-    sent_after_first_reply = [r["request_id"] for r in rows if float(r["actual_offset_s"]) >= first_reply_s]
     assert [r["outcome"] for r in rows] == ["success"] * 4
-    # asyncio's clock moves in steps of about 15 ms on Windows, so the stub's
-    # 2 s sleep can end a little early.
-    assert first_reply_s > 1.9
-    assert sent_after_first_reply == []
+    # Arrival at the stub, not the send stamp, so a sender waiting for a free
+    # connection would fail here.
+    assert len(app.state.arrived_at) == 4
+    assert max(app.state.arrived_at) < min(app.state.replied_at)
 
 
 async def block_event_loop(after_s, for_s):
