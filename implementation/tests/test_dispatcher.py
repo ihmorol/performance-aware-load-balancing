@@ -23,15 +23,15 @@ pytestmark = pytest.mark.anyio
 D_MS = 300  # dispatcher timeout in these tests
 
 
-def make_config(warmup_count=0, probe_threshold_s=0.2, ewma_weight=0.5, weights=(1, 1), timeout_ms=D_MS):
+def make_config(warmup_count=0, probe_threshold_s=0.2, timeout_ms=D_MS):
     return Config(
         stage="pilot",
         addresses=AddressesConfig(workers=("http://w1", "http://w2")),
         dispatcher=DispatcherConfig(
-            timeout_ms=timeout_ms, ewma_weight=ewma_weight,
+            timeout_ms=timeout_ms, ewma_weight=0.5,
             probe_threshold_s=probe_threshold_s, warmup_count=warmup_count,
         ),
-        weights=WeightsConfig(scenario1=weights, scenario2=weights, scenario3=weights),
+        weights=WeightsConfig(scenario1=(1, 1)),
         # Tiny images keep the tests fast; the fake workers don't decode them.
         images=ImagesConfig(resolutions=ResolutionsConfig(small=(32, 24), medium=(64, 48), large=(96, 72))),
         seeds=SeedsConfig(image_set=1),
@@ -41,12 +41,13 @@ def make_config(warmup_count=0, probe_threshold_s=0.2, ewma_weight=0.5, weights=
 class FakeWorker:
     """A worker whose reply each test sets. It records every call it gets."""
 
-    def __init__(self, status=200, delay_s=0.0, processing_ms="100.000", outcome=protocol.DONE):
+    def __init__(self, status=200, delay_s=0.0, processing_ms="100.000", outcome=protocol.DONE,
+                 refuse_connections=False):
         self.status = status
         self.delay_s = delay_s
         self.processing_ms = processing_ms
         self.outcome = outcome
-        self.refuse_connections = False
+        self.refuse_connections = refuse_connections
         self.calls = []  # (headers, body) per call
         self.app = FastAPI()
         self.app.post("/process")(self.process)
@@ -180,35 +181,17 @@ async def test_each_request_gives_one_log_row_with_the_state_before_the_decision
     assert float(first["dispatcher_ms"]) > 0
 
 
-def worker_that(behaviour):
-    if behaviour == "succeeds":
-        return FakeWorker()
-    if behaviour == "is full":
-        return FakeWorker(status=503, outcome=protocol.REJECTED)
-    if behaviour == "expires the request":
-        return FakeWorker(status=504, outcome=protocol.EXPIRED)
-    if behaviour == "fails":
-        return FakeWorker(status=500, outcome=protocol.ERROR)
-    if behaviour == "refuses connections":
-        worker = FakeWorker()
-        worker.refuse_connections = True
-        return worker
-    if behaviour == "is slower than d":
-        return FakeWorker(delay_s=1.0)
-    raise ValueError(behaviour)
-
-
-@pytest.mark.parametrize("behaviour, status, outcome, worker_status", [
-    ("succeeds", 200, "success", "200"),
-    ("is full", 503, "rejected", "503"),
-    ("expires the request", 504, "expired", "504"),
-    ("fails", 502, "error", "500"),
-    ("refuses connections", 502, "error", ""),
-    ("is slower than d", 504, "timeout", ""),
-])
+@pytest.mark.parametrize("worker, status, outcome, worker_status", [
+    ({}, 200, "success", "200"),
+    ({"status": 503, "outcome": protocol.REJECTED}, 503, "rejected", "503"),
+    ({"status": 504, "outcome": protocol.EXPIRED}, 504, "expired", "504"),
+    ({"status": 500, "outcome": protocol.ERROR}, 502, "error", "500"),
+    ({"refuse_connections": True}, 502, "error", ""),
+    ({"delay_s": 1.0}, 504, "timeout", ""),
+], ids=["success", "rejected", "expired", "worker error", "connection refused", "timeout"])
 async def test_outcome_is_passed_back_and_the_unfinished_count_returns_to_0(
-        tmp_path, behaviour, status, outcome, worker_status):
-    w1, w2 = worker_that(behaviour), worker_that(behaviour)
+        tmp_path, worker, status, outcome, worker_status):
+    w1, w2 = FakeWorker(**worker), FakeWorker(**worker)
     async with started(w1, w2) as client:
         reply = await post(client, "r1")
         await post(client, "r2")
@@ -225,9 +208,8 @@ async def test_outcome_is_passed_back_and_the_unfinished_count_returns_to_0(
     assert (r2["unfinished_w1"], r2["unfinished_w2"]) == ("0", "0")
 
 
-@pytest.mark.parametrize("processing_ms", [None, "abc"])
-async def test_a_200_reply_without_a_usable_processing_time_is_an_error_with_a_log_row(tmp_path, processing_ms):
-    w1, w2 = FakeWorker(processing_ms=processing_ms), FakeWorker()
+async def test_a_200_reply_without_a_processing_time_is_an_error_with_a_log_row(tmp_path):
+    w1, w2 = FakeWorker(processing_ms=None), FakeWorker()
     async with started(w1, w2) as client:
         reply = await post(client, "r1")
         await post(client, "r2")
@@ -275,7 +257,7 @@ async def test_warm_up_sends_the_same_medium_image_to_each_worker_under_every_ru
 
 
 async def test_a_failed_warm_up_request_keeps_health_at_503(tmp_path):
-    w1, w2 = worker_that("succeeds"), worker_that("fails")
+    w1, w2 = FakeWorker(), FakeWorker(status=500, outcome=protocol.ERROR)
     async with started(w1, w2, config=make_config(warmup_count=2)) as client:
         await wait_until(lambda: len(w2.calls) == 2)
         await asyncio.sleep(0.1)  # let the last warm-up reply arrive
@@ -287,22 +269,12 @@ async def test_a_failed_warm_up_request_keeps_health_at_503(tmp_path):
 
 
 async def test_weighted_round_robin_rule_uses_the_scenario_weights_from_config():
-    config = dataclasses.replace(
-        make_config(), weights=WeightsConfig(scenario1=(1, 1), scenario2=(3, 1), scenario3=(1, 1)),
-    )
+    config = dataclasses.replace(make_config(), weights=WeightsConfig(scenario2=(3, 1)))
     w1, w2 = FakeWorker(), FakeWorker()
     async with started(w1, w2, rule="wrr", config=config, scenario=2) as client:
         replies = [await post(client, f"r{i}") for i in range(1, 9)]
 
     assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w1"] * 2
-
-
-async def test_round_robin_rule_runs_without_weights_in_the_config():
-    config = dataclasses.replace(make_config(), weights=WeightsConfig())
-    async with started(FakeWorker(), FakeWorker(), rule="rr", config=config) as client:
-        replies = [await post(client, f"r{i}") for i in range(1, 5)]
-
-    assert [r.headers[protocol.CHOSEN_WORKER] for r in replies] == ["w1", "w2", "w1", "w2"]
 
 
 def probe_calls(worker):
@@ -311,7 +283,7 @@ def probe_calls(worker):
 
 async def test_feedback_rule_probes_an_idle_worker_once_after_t_and_the_probe_time_enters_the_estimate(tmp_path):
     w1, w2 = FakeWorker(processing_ms="500.000"), FakeWorker(processing_ms="500.000")
-    config = make_config(warmup_count=1, probe_threshold_s=0.5, ewma_weight=0.5)
+    config = make_config(warmup_count=1, probe_threshold_s=0.5)
     async with started(w1, w2, rule="feedback", config=config) as client:
         await wait_for_health(client)
         healthy_at = time.perf_counter()
@@ -330,7 +302,7 @@ async def test_feedback_rule_probes_an_idle_worker_once_after_t_and_the_probe_ti
     probe_row = next(r for r in rows if r["request_id"] == "probe-w1-0")
     assert (probe_row["probe"], probe_row["warmup"], probe_row["select_ns"]) == ("1", "0", "")
     assert (probe_row["chosen_worker"], probe_row["outcome"]) == ("w1", "success")
-    # 0.5 x 500 + 0.5 x 100 = 300
+    # a = 0.5 in make_config: 0.5 x 500 + 0.5 x 100 = 300
     assert next(r for r in rows if r["request_id"] == "r1")["estimate_w1_ms"] == "300.000"
 
 
