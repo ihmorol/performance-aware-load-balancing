@@ -104,7 +104,11 @@ async def _send_one(client: httpx.AsyncClient, target: str, run_id: str, planned
 
 async def _wait_until(planned_at: float, spin_wait: bool) -> None:
     if not spin_wait:
-        await asyncio.sleep(max(0.0, planned_at - time.perf_counter()))
+        # asyncio's timer runs on time.monotonic, which moves in steps of about
+        # 15.6 ms on Windows, so one sleep can end before planned_at. An early
+        # send would make the response time look shorter, so sleep again.
+        while (left := planned_at - time.perf_counter()) > 0:
+            await asyncio.sleep(left)
         return
     await asyncio.sleep(max(0.0, planned_at - SPIN_MARGIN_S - time.perf_counter()))
     # The busy-wait blocks the event loop for up to SPIN_MARGIN_S, so other
