@@ -59,11 +59,11 @@ These need the teammate's PC with VirtualBox. An agent can't do them.
 
 ## Progress
 
-- [ ] #2 Worker service with seeded image set (wave 1)
+- [x] #2 Worker service with seeded image set (wave 1), merged in #10
 - [ ] #3 Dispatcher with the four routing rules (wave 2)
 - [ ] #4 Open-loop load generator and response-time summary (wave 2)
 - [ ] #5 Local orchestrator, monitoring, and round runner (wave 3)
 - [ ] #6 VM deployment and SSH backend (wave 4)
 - [ ] #7 Pilot, calibration, and dry-run tools (wave 4)
 
-Progress is tracked on issue #8. This list is a copy at the time of writing.
+Progress is tracked on issue #8. This list is a copy, last updated 2026-11-21.

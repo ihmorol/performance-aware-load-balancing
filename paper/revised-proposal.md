@@ -1,6 +1,6 @@
 # Performance-aware load balancing: revised proposal
 
-Revised 2026-11-19. This revision keeps the frozen proposal in `final/` as the base: same question family, same four rules, same three-VM testbed, same three scenarios, same metrics. It changes wording that promised too much, fills in details the proposal left open, and states the novelty claim more carefully, using the literature in `paper/literature/gap-analysis.md`. Nothing here is a result. The system is not built yet.
+Revised 2026-11-19. This revision keeps the frozen proposal in `final/` as the base: same question family, same four rules, same three-VM testbed, same three scenarios, same metrics. It changes wording that promised too much, fills in details the proposal left open, and states the novelty claim more carefully, using the literature in `paper/literature/gap-analysis.md`. Nothing here is a result. The build follows `implementation/spec.md`; as of 2026-11-21 only the worker and shared package are built, and no experiment has run.
 
 The frozen deck and guides are not edited. Where this document and `final/` differ, this document is the current plan, and the reason is listed in the last section.
 
@@ -37,7 +37,7 @@ All four share one forwarding path in the dispatcher. Only the selection step ch
 1. Round-robin. Strict alternation.
 2. Weighted round-robin. Fixed weights proportional to each worker's profiled throughput, following the throughput-aware weighting in Aslanpour et al. (FGCS 2024, Section 4.2): weight of a worker = its measured throughput ÷ the sum of both workers' throughput. Throughput is profiled in a separate calibration run for each scenario, with that scenario's image mix, before the main runs. Weights are not changed after that. When both workers are equal, the calibrated ratio will be close to 1:1 and weighted round-robin will behave like round-robin. We report that as an expected outcome and a check of the setup, not as a weakness.
 3. Least unfinished requests. Pick the worker with fewer unfinished requests, counting running and waiting requests at the dispatcher. This is the least connections idea counted in requests, not TCP connections.
-4. Feedback rule (SED-style). Pick the worker with the smaller (unfinished + 1) × recent average processing time. The averaging method and its size are fixed in the pilot and not tuned after the main runs. A worker with no completed request for a fixed time gets one small probe image. Probes are counted and reported as overhead.
+4. Feedback rule (SED-style). Pick the worker with the smaller (unfinished + 1) × recent average processing time. The recent average is an EWMA of the processing times the worker reports. Its weight is fixed in the pilot and not tuned after the main runs. A worker with no completed request for a fixed time and nothing unfinished gets one small probe image. Probes are counted and reported as overhead.
 
 Weighted round-robin gets advance knowledge of the slowed worker through calibration. The feedback rule has to learn it at run time. The paper states this difference.
 
@@ -53,7 +53,7 @@ The load generator runs open loop. Send times and image choices are generated fr
 
 ## Metrics
 
-Per run: mean and p95 response time over successful requests, p95 per image size class (scenarios 2 and 3), successful throughput next to the offered rate, failures by type (rejected, timed out, error), CPU and RAM per VM, dispatcher CPU time, time to choose a worker, probe count, and the achieved sending rate. A run that misses its planned rate by more than a tolerance set in the pilot is kept and flagged.
+Per run: mean and p95 response time over successful requests, p95 per image size class (scenarios 2 and 3), successful throughput next to the offered rate, failures by type (rejected, expired, timed out, error), CPU and RAM per VM, dispatcher CPU time, time to choose a worker, probe count, and the achieved sending rate. A run that misses its planned rate by more than a tolerance set in the pilot is kept and flagged.
 
 Below overload, throughput should be close to the offered rate for every rule, so throughput differences are expected mainly at the highest rate.
 

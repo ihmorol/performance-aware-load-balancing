@@ -13,7 +13,7 @@ All prose here follows the two vendored skills. Read them before writing or edit
 
 Pick words in this order:
 
-1. Words the team already uses. The documents in `final/` set the register. Project terms such as dispatcher, worker, rule, feedback, p95, round-robin, and least connections stay exactly as they are.
+1. Words the team already uses. The documents in `final/` set the register. Project terms such as dispatcher, worker, rule, feedback, p95, round-robin, least unfinished requests, and least connections stay exactly as they are. Rule 3 is called least unfinished requests (decided 2026-11-19, see `notes/decisions.md`); least connections is the general idea it comes from and may still be used for that idea.
 2. Words the repository owner uses often in conversation and messages.
 3. Simple words people use every day.
 
