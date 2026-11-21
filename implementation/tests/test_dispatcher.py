@@ -76,6 +76,7 @@ class TwoWorkers(httpx.AsyncBaseTransport):
     async def handle_async_request(self, request):
         name = request.url.host
         if self.workers[name].refuse_connections:
+            self.workers[name].calls.append((request.headers, b""))  # count the attempt
             raise httpx.ConnectError("connection refused", request=request)
         return await self.transports[name].handle_async_request(request)
 
@@ -216,6 +217,8 @@ async def test_outcome_is_passed_back_and_the_unfinished_count_returns_to_0(
     assert reply.status_code == status
     assert reply.headers[protocol.OUTCOME] == outcome
     assert reply.headers[protocol.CHOSEN_WORKER] == "w1"
+    # One call per request: nothing is retried.
+    assert (w1.request_ids(), w2.request_ids()) == (["r1"], ["r2"])
     r1, r2 = rows
     assert (r1["outcome"], r1["worker_status"]) == (outcome, worker_status)
     # r2's row holds the counts seen when r2 was assigned, after r1 ended.
@@ -235,16 +238,6 @@ async def test_a_200_reply_without_a_usable_processing_time_is_an_error_with_a_l
     r1, r2 = rows
     assert (r1["request_id"], r1["outcome"], r1["worker_status"]) == ("r1", "error", "200")
     assert r2["estimate_w1_ms"] == ""  # the reply did not feed the estimate
-
-
-async def test_a_failed_request_is_not_retried():
-    w1, w2 = worker_that("fails"), worker_that("is slower than d")
-    async with started(w1, w2) as client:
-        replies = [await post(client, f"r{i}") for i in range(1, 5)]
-
-    assert [r.status_code for r in replies] == [502, 504, 502, 504]
-    assert w1.request_ids() == ["r1", "r3"]
-    assert w2.request_ids() == ["r2", "r4"]
 
 
 async def wait_for_health(client):
