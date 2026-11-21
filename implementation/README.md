@@ -65,17 +65,15 @@ Nothing is cached, so two identical requests cost the same work.
 python -m dispatcher --config config/dev.toml --rule rr --scenario 1 --rate 2 --run-id manual --port 8100
 ```
 
-`--rule` is one of `rr` (round-robin), `wrr` (weighted round-robin), `lur` (least unfinished requests), or `feedback`. Scenario, rate, and run id go into every log row. Add `--host 0.0.0.0` on a VM. The two worker addresses come from `addresses.workers` and are called w1 and w2 in that order. Weighted round-robin uses `weights.scenario<N>`. The timeout D, EWMA weight, probe threshold T, and warm-up count K come from the `dispatcher` section. The dispatcher stops at start-up if one of the values it needs is unset.
+`--rule` is `rr`, `wrr`, `lur` (least unfinished requests), or `feedback`. Add `--host 0.0.0.0` on a VM. The workers in `addresses.workers` are called w1 and w2, in that order.
 
-- `POST /process` reads the whole body, picks a worker, and forwards the request with one shared HTTPX client. The worker gets the same body and the `X-Request-Id`, `X-Image-Id`, and `X-Size-Class` headers, plus `X-Budget-Ms` equal to D and `X-Probe: 0`. The reply carries the worker's body, `X-Outcome`, `X-Chosen-Worker` (w1 or w2), and the worker's `X-Processing-Ms` and `X-Output-Bytes` when it sent them.
-- Outcomes: a worker 200 is `success`, a worker 503 is passed back as 503 `rejected`, and a worker 504 with `X-Outcome: expired` is passed back as 504 `expired`. No reply within D gives 504 `timeout`. A connection error or any other worker status gives 502 `error`. Nothing is retried.
-- Each worker has an unfinished count. It goes up by one when a request, warm-up request, or probe is sent there, and down by one when that request ends, whatever the outcome.
-- The four rules differ only in `select()` (`dispatcher/rules.py`). Round-robin alternates. Weighted round-robin is smooth weighted round-robin with the scenario's weights. Least unfinished requests picks the worker with fewer unfinished requests. The feedback rule picks the smaller (unfinished + 1) × estimate. On a tie, every rule picks the worker it did not pick last time, and the very first tie goes to w1.
-- The estimate is an EWMA of the processing times the worker reports: estimate = (1 − a) × estimate + a × newest time, with a from `dispatcher.ewma_weight`. A worker's first sample sets its estimate. Successful replies, warm-up replies, and probe replies all feed it, under every rule.
-- Warm-up: at start-up the dispatcher sends K requests with the same medium image (`medium-00` from the seeded set) to w1, then K to w2. `GET /health` answers 503 until all of them have succeeded, then 200. If one fails, it stays at 503.
-- Probes, feedback rule only: every T/4 seconds the dispatcher checks each worker. A worker with no completion for T seconds, nothing unfinished, and no probe in flight gets one small image (`small-00`) with `X-Probe: 1`. The probe counts as unfinished and its time enters the estimate. The other rules never probe.
-- `GET /admin/cpu` returns `{"cpu_s": ...}`, the dispatcher's process CPU time in seconds.
-- `POST /admin/flush` with `{"path": "<csv file>"}` writes the log, the same request the worker takes. There is one row per request, warm-up request, and probe, with the columns in `plb.rows.DISPATCHER_LOG_COLUMNS`. The unfinished counts and estimates in a row are the values seen just before the choice. `select_ns` is the time `select()` took and is empty for warm-up requests and probes, which go to a fixed worker. `dispatcher_ms` runs from the moment the request body has been read to the reply. The log is also written to `--log` (default `local/dispatcher-<port>.csv`) when the dispatcher shuts down cleanly.
+- `POST /process` reads the whole body, picks a worker, and forwards the request with `X-Budget-Ms` set to the dispatcher timeout D. The reply carries the worker's body and `X-Outcome`, `X-Chosen-Worker`, and `X-Processing-Ms`.
+- Outcomes: a worker 200 is `success`, a worker 503 is passed back as `rejected`, and a worker 504 `expired` as `expired`. No reply within D gives 504 `timeout`, and a connection error or any other reply gives 502 `error`. Nothing is retried.
+- `GET /health` answers 503 until warm-up has succeeded, then 200.
+- `GET /admin/cpu` returns the dispatcher's process CPU time in seconds.
+- `POST /admin/flush` with `{"path": "<csv file>"}` writes the log, one row per request, warm-up request, and probe, with the columns in `plb.rows.DISPATCHER_LOG_COLUMNS`. The dispatcher also writes it to `--log` (default `local/dispatcher-<port>.csv`) when it shuts down cleanly.
+
+The rules, the EWMA estimate, warm-up, and probes follow the "Dispatcher" section of [spec.md](spec.md). On a tie, every rule picks the worker it did not pick last time, and the first tie goes to w1.
 
 ## Before running experiments
 
