@@ -48,58 +48,51 @@ MIX_KEYS = ("images.mix.small", "images.mix.medium", "images.mix.large")
 
 async def send_schedule(target: str, run_id: str, schedule: list[PlannedRequest],
                         bodies: dict[str, bytes], timeout_s: float, spin_wait: bool) -> list[dict]:
-    """Send every planned request to target and return one log row each, in schedule order."""
+    """Send every planned request and return one log row each, in schedule order."""
+
+    async def _send_one(planned: PlannedRequest) -> dict:
+        planned_at = start + planned.planned_offset_s
+        await _wait_until(planned_at, spin_wait)
+        sent_at = time.perf_counter()
+        headers = {
+            protocol.REQUEST_ID: planned.request_id,
+            protocol.IMAGE_ID: planned.image_id,
+            protocol.SIZE_CLASS: planned.size_class,
+        }
+        status, outcome, reply_headers = "", protocol.TIMEOUT, {}
+        try:
+            # wait_for gives one total deadline per request; HTTPX timeouts
+            # apply to each phase (connect, write, read) separately.
+            reply = await asyncio.wait_for(
+                client.post(target, content=bodies[planned.image_id], headers=headers), timeout_s)
+            status, outcome, reply_headers = str(reply.status_code), reply_outcome(reply), reply.headers
+        except TimeoutError:
+            pass
+        except httpx.HTTPError:
+            outcome = protocol.ERROR
+        done_at = time.perf_counter()
+        return {
+            "run_id": run_id,
+            "request_id": planned.request_id,
+            "image_id": planned.image_id,
+            "size_class": planned.size_class,
+            "planned_offset_s": f"{planned.planned_offset_s:.6f}",
+            "actual_offset_s": f"{sent_at - start:.6f}",
+            "send_lag_ms": f"{(sent_at - planned_at) * 1000:.3f}",
+            "status": status,
+            "outcome": outcome,
+            "response_ms": f"{(done_at - planned_at) * 1000:.3f}",
+            # A worker answering directly sends no chosen worker header.
+            "chosen_worker": reply_headers.get(protocol.CHOSEN_WORKER, ""),
+            "processing_ms": reply_headers.get(protocol.PROCESSING_MS, ""),
+            "output_bytes": reply_headers.get(protocol.OUTPUT_BYTES, ""),
+        }
+
     # No connection limit, so a send never waits for a free connection.
     limits = httpx.Limits(max_connections=None, max_keepalive_connections=None)
-    async with httpx.AsyncClient(limits=limits, timeout=timeout_s) as client:
+    async with httpx.AsyncClient(limits=limits, timeout=None) as client:
         start = time.perf_counter()
-        tasks = [
-            asyncio.create_task(_send_one(client, target, run_id, planned, bodies, start, timeout_s,
-                                          spin_wait))
-            for planned in schedule
-        ]
-        return list(await asyncio.gather(*tasks))
-
-
-async def _send_one(client: httpx.AsyncClient, target: str, run_id: str, planned: PlannedRequest,
-                    bodies: dict[str, bytes], start: float, timeout_s: float,
-                    spin_wait: bool) -> dict:
-    planned_at = start + planned.planned_offset_s
-    await _wait_until(planned_at, spin_wait)
-    sent_at = time.perf_counter()
-    headers = {
-        protocol.REQUEST_ID: planned.request_id,
-        protocol.IMAGE_ID: planned.image_id,
-        protocol.SIZE_CLASS: planned.size_class,
-    }
-    status, outcome, reply_headers = "", protocol.TIMEOUT, {}
-    try:
-        # wait_for enforces the timeout even where an HTTPX transport ignores
-        # the client's own timeout setting.
-        reply = await asyncio.wait_for(
-            client.post(target, content=bodies[planned.image_id], headers=headers), timeout_s)
-        status, outcome, reply_headers = str(reply.status_code), reply_outcome(reply), reply.headers
-    except (TimeoutError, httpx.TimeoutException):
-        pass
-    except httpx.HTTPError:
-        outcome = protocol.ERROR
-    done_at = time.perf_counter()
-    return {
-        "run_id": run_id,
-        "request_id": planned.request_id,
-        "image_id": planned.image_id,
-        "size_class": planned.size_class,
-        "planned_offset_s": f"{planned.planned_offset_s:.6f}",
-        "actual_offset_s": f"{sent_at - start:.6f}",
-        "send_lag_ms": f"{(sent_at - planned_at) * 1000:.3f}",
-        "status": status,
-        "outcome": outcome,
-        "response_ms": f"{(done_at - planned_at) * 1000:.3f}",
-        # A worker answering directly sends no chosen worker header.
-        "chosen_worker": reply_headers.get(protocol.CHOSEN_WORKER, ""),
-        "processing_ms": reply_headers.get(protocol.PROCESSING_MS, ""),
-        "output_bytes": reply_headers.get(protocol.OUTPUT_BYTES, ""),
-    }
+        return await asyncio.gather(*(_send_one(p) for p in schedule))
 
 
 async def _wait_until(planned_at: float, spin_wait: bool) -> None:
@@ -111,9 +104,8 @@ async def _wait_until(planned_at: float, spin_wait: bool) -> None:
             await asyncio.sleep(left)
         return
     await asyncio.sleep(max(0.0, planned_at - SPIN_MARGIN_S - time.perf_counter()))
-    # The busy-wait blocks the event loop for up to SPIN_MARGIN_S, so other
-    # tasks wait too. That is accepted: the pilot decides whether the switch
-    # is used at all.
+    # Busy-waiting blocks the event loop, so replies that arrive meanwhile are
+    # read a little late. The pilot decides whether the switch is on.
     while time.perf_counter() < planned_at:
         pass
 
