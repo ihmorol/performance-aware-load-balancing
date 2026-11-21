@@ -39,7 +39,6 @@ class WorkerState:
     estimate_ms: float | None = None  # None until the first sample
     # time.perf_counter() of the last reply that fed the estimate.
     last_completion_s: float | None = None
-    probe_in_flight: bool = False
     probes_sent: int = 0
 
 
@@ -86,8 +85,6 @@ def create_app(
     health = "warming up"  # then "ok", or "warm-up failed" for good
     warmup_image = generate_image(config.images, config.seeds.image_set, "medium", 0)
     probe_image = generate_image(config.images, config.seeds.image_set, "small", 0)
-    probes: set[asyncio.Task] = set()  # probe tasks still running
-
     def snapshot() -> tuple[WorkerView, WorkerView]:
         return tuple(WorkerView(w.unfinished, w.estimate_ms) for w in workers)
 
@@ -177,32 +174,22 @@ def create_app(
                 all_succeeded = all_succeeded and result.outcome == protocol.SUCCESS
         return all_succeeded
 
-    async def probe(index: int) -> None:
-        worker = workers[index]
-        job = Job(f"probe-{WORKER_NAMES[index]}-{worker.probes_sent}", probe_image.image_id,
-                  probe_image.size_class, probe_image.data, probe=True)
-        worker.probes_sent += 1
-        try:
-            await send_without_select(index, job)
-        finally:
-            worker.probe_in_flight = False
-
     async def probe_loop() -> None:
         """Probe a worker with no completion for T seconds and nothing unfinished."""
         threshold_s = config.dispatcher.probe_threshold_s
         while True:
             await asyncio.sleep(threshold_s / 4)
-            now = time.perf_counter()
             for index, worker in enumerate(workers):
                 # A worker that never completed anything counts as idle.
-                idle = worker.last_completion_s is None or now - worker.last_completion_s >= threshold_s
-                if idle and worker.unfinished == 0 and not worker.probe_in_flight:
-                    worker.probe_in_flight = True
-                    # A task per probe, so a slow probe doesn't hold up the
-                    # check of the other worker.
-                    task = asyncio.create_task(probe(index))
-                    probes.add(task)
-                    task.add_done_callback(probes.discard)
+                last = worker.last_completion_s
+                idle = last is None or time.perf_counter() - last >= threshold_s
+                if idle and worker.unfinished == 0:
+                    # Awaited, not a task: the probe counts as unfinished at
+                    # once, and no probe can be in flight during a check.
+                    job = Job(f"probe-{WORKER_NAMES[index]}-{worker.probes_sent}", probe_image.image_id,
+                              probe_image.size_class, probe_image.data, probe=True)
+                    worker.probes_sent += 1
+                    await send_without_select(index, job)
 
     async def start_up() -> None:
         nonlocal health
@@ -224,10 +211,9 @@ def create_app(
         try:
             yield
         finally:
-            tasks = [background, *probes]
-            for task in tasks:
-                task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            background.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await background
             await client.aclose()
             if shutdown_log_path is not None:
                 write_log(log, shutdown_log_path)

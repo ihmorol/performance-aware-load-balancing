@@ -354,6 +354,21 @@ async def test_feedback_rule_does_not_probe_a_worker_with_unfinished_requests():
     assert probe_calls(w2)  # the idle worker was probed meanwhile
 
 
+async def test_feedback_rule_counts_a_probe_as_unfinished(tmp_path):
+    w1, w2 = FakeWorker(), FakeWorker()
+    config = make_config(warmup_count=1, probe_threshold_s=0.2, timeout_ms=2000)
+    async with started(w1, w2, rule="feedback", config=config) as client:
+        await wait_for_health(client)
+        w1.delay_s = 0.5  # the probe stays unfinished for many checks of T/4
+        await wait_until(lambda: probe_calls(w1))
+        await post(client, "r1")
+        rows = await flush(client, tmp_path / "dispatcher.csv")
+
+    r1 = next(r for r in rows if r["request_id"] == "r1")
+    assert r1["unfinished_w1"] == "1"
+    assert len(probe_calls(w1)) == 1
+
+
 @pytest.mark.parametrize("rule", ["rr", "wrr", "lur"])
 async def test_no_probe_is_sent_under_the_other_rules(rule):
     w1, w2 = FakeWorker(), FakeWorker()
