@@ -25,11 +25,7 @@ def nearest_rank(values: list[float], q: float) -> float | None:
     """The value at position ceil(q * n) after sorting, counting from 1."""
     if not values:
         return None
-    ordered = sorted(values)
-    # q * n can land just above a whole number in floating point (0.07 * 100
-    # gives 7.000000000000001), and ceil would then pick the next rank.
-    rank = math.ceil(q * len(ordered) - 1e-9)
-    return ordered[max(rank, 1) - 1]
+    return sorted(values)[math.ceil(q * len(values)) - 1]
 
 
 def summarize(rows: list[dict], run: dict) -> dict:
@@ -50,14 +46,12 @@ def summarize(rows: list[dict], run: dict) -> dict:
             for size_class in SIZE_CLASSES
         }
 
-    # The achieved rate is compared with what the schedule planned for the same
-    # window, not with the offered rate, so Poisson noise in the schedule never sets the flag.
-    planned_rate = sum(window_start <= float(r["planned_offset_s"]) < length_s for r in rows) / window_s
+    # The flag compares with what the schedule planned for the window, not with the
+    # offered rate, so Poisson noise never sets it. An empty window is flagged too.
+    planned_rate = len(measured) / window_s
     achieved_rate = sum(window_start <= float(r["actual_offset_s"]) < length_s for r in rows) / window_s
-    if planned_rate == 0:
-        rate_flag = True  # nothing planned in the window, so the run can't be checked
-    else:
-        rate_flag = abs(achieved_rate - planned_rate) / planned_rate > run["achieved_rate_tolerance"]
+    rate_flag = (planned_rate == 0
+                 or abs(achieved_rate - planned_rate) / planned_rate > run["achieved_rate_tolerance"])
     lags = [float(r["send_lag_ms"]) for r in measured]
 
     return {

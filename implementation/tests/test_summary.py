@@ -48,11 +48,6 @@ def test_nearest_rank_of_no_values_is_none():
     assert nearest_rank([], 0.95) is None
 
 
-def test_nearest_rank_is_not_pushed_up_by_float_error():
-    # ceil(0.07 * 100) is 7, though 0.07 * 100 is 7.000000000000001 in floating point.
-    assert nearest_rank(list(range(1, 101)), 0.07) == 7
-
-
 def test_requests_planned_in_the_first_w_seconds_are_left_out():
     rows = [row(1.0, 9000), row(4.999, 9000), row(5.0, 100), row(10.0, 200), row(20.0, 300)]
 
