@@ -30,7 +30,7 @@ All five live in [final/](final/):
 - `Performance_Aware_Load_Balancing_Defense_Study_Guide_EN_BN.md`, defense prep in simple English and Bangla
 - `Cloud Computing Project_Term paper Guidelines.pdf`, the course requirements
 
-New to the project? Read the defense study guide first, then the deck.
+New to the project? Start with [notes/team-guide.md](notes/team-guide.md), which explains load balancing, VMs, the plan, and who does what from scratch. Then read the defense study guide and the deck.
 
 ## Layout
 
