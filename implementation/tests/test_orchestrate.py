@@ -1,6 +1,7 @@
 import csv
 import dataclasses
 import json
+import socket
 import subprocess
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 
 from experiments.backend import Backend
 from experiments.backends import BACKENDS
-from experiments.local_backend import is_healthy
+from experiments.local_backend import LocalBackend, is_healthy
 from experiments.orchestrate import Condition, run_condition, run_round
 from experiments.orchestrate import main as orchestrate_main
 from plb.config import load_config
@@ -248,6 +249,22 @@ def test_a_health_reply_is_ok_on_200_waits_while_warming_up_and_fails_after_a_fa
     assert not is_healthy("dispatcher", httpx.Response(503, json={"status": "warming up"}))
     with pytest.raises(RuntimeError, match="dispatcher warm-up failed"):
         is_healthy("dispatcher", httpx.Response(503, json={"status": "warm-up failed"}))
+
+
+def test_starting_a_service_on_a_port_something_already_listens_on_raises():
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        held.listen()
+        port = held.getsockname()[1]
+        dev = load_config(DEV_CONFIG)
+        addresses = dataclasses.replace(dev.addresses, workers=(f"http://127.0.0.1:{port}", dev.addresses.workers[1]))
+        backend = LocalBackend(dataclasses.replace(dev, addresses=addresses), DEV_CONFIG)
+        try:
+            with pytest.raises(RuntimeError, match=f"port {port}"):
+                backend.start("w1")
+            assert backend.services == {}
+        finally:
+            backend.close()
 
 
 def test_scenario_3_on_a_backend_without_quota_records_unsupported(tmp_path):

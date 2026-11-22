@@ -7,6 +7,7 @@ operations return "unsupported".
 
 from __future__ import annotations
 
+import socket
 import subprocess
 import sys
 import time
@@ -37,9 +38,15 @@ class LocalBackend(Backend):
         self.client = httpx.Client(timeout=5.0)
 
     def start(self, service, rule=None, scenario=None, rate=None, run_id=None):
+        address = urlsplit(self.urls[service])
+        with socket.socket() as probe:
+            probe.settimeout(1.0)
+            if probe.connect_ex((address.hostname, address.port)) == 0:
+                raise RuntimeError(f"something already listens on port {address.port} for {service}; "
+                                   "a process from an earlier, killed run may still hold it")
         module = "dispatcher" if service == "dispatcher" else "worker"
         command = [sys.executable, "-m", module, "--config", str(self.config_path),
-                   "--port", str(urlsplit(self.urls[service]).port), "--log", str(self._log_path(service))]
+                   "--port", str(address.port), "--log", str(self._log_path(service))]
         if service == "dispatcher":
             command += ["--rule", rule, "--scenario", str(scenario), "--rate", str(rate), "--run-id", run_id]
         self.services[service] = subprocess.Popen(command, cwd=IMPLEMENTATION)

@@ -134,7 +134,7 @@ python -m experiments.orchestrate throw-out --run-id r1-s2-feedback-2-a1 \
 
 `--results` defaults to `../results`, relative to this folder. Runs on a laptop should use `--results local/results`, so they never land in `results/` and can't be mistaken for measurements. `--run-length` shortens the run and is refused in the main stage. The config is loaded before any backend starts, so a main stage config with an unset value or a dirty working tree is refused before any service runs.
 
-The local backend starts every service as a process on this machine with the ports from `config.addresses`. It has no cgroups, so the quota and cpu.stat operations return `unsupported`, and metadata.json records them that way. The backends are listed in `experiments/backends.py`.
+The local backend starts every service as a process on this machine with the ports from `config.addresses`. It has no cgroups, so the quota and cpu.stat operations return `unsupported`, and metadata.json records them that way. Ctrl+C is safe, but on Windows a hard kill of the orchestrator leaves the services running, so stop them by the PIDs that `netstat -ano` shows before the next run; until then, starting a service on a taken port fails the run with a message that names the port. The backends are listed in `experiments/backends.py`.
 
 One run follows the steps of "Orchestrator" in [spec.md](spec.md):
 
