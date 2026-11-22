@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 import httpx
 import psutil
 
-from experiments.backends import UNSUPPORTED, Backend
+from experiments.backend import UNSUPPORTED, Backend
 from plb.config import Config
 
 IMPLEMENTATION = Path(__file__).resolve().parents[1]

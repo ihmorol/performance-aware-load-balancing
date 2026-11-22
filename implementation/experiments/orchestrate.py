@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dispatcher.rules import RULES
-from experiments.backends import BACKENDS, UNSUPPORTED, Backend, make_backend
+from experiments.backend import UNSUPPORTED, Backend
+from experiments.backends import BACKENDS, make_backend
 from plb.config import Config, ConfigError, config_hash, git_commit, load_config
 from plb.summary import summarize_run_dir
 

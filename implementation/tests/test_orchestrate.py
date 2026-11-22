@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from experiments.backends import BACKENDS, Backend
+from experiments.backend import Backend
+from experiments.backends import BACKENDS
 from experiments.orchestrate import Condition, run_condition, run_round
 from experiments.orchestrate import main as orchestrate_main
 from plb.config import load_config
