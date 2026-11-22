@@ -131,7 +131,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--rule", required=True, help="the rule under test; recorded only")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--out", required=True, help="run folder")
+    parser.add_argument("--run-length", type=float,
+                        help="run length in seconds instead of run.length_s; refused in the main stage")
     args = parser.parse_args(argv)
+    if args.rate <= 0:
+        parser.error("--rate must be greater than 0")
 
     config = load_config(args.config)
     images = config.images
@@ -156,8 +160,16 @@ def main(argv: list[str] | None = None) -> None:
     if unset:
         parser.error(f"unset in the config: {', '.join(unset)}")
 
+    length_s, dropped_s = config.run.length_s, config.run.dropped_window_s
+    if args.run_length is not None:
+        if config.stage == "main":
+            parser.error("--run-length is refused in the main stage, which uses run.length_s")
+        # W keeps the same share of the shorter run.
+        dropped_s = dropped_s * args.run_length / length_s
+        length_s = args.run_length
+
     seed = schedule_seed(config.seeds.schedule, args.scenario, args.rate, args.round)
-    schedule = build_schedule(seed, args.scenario, args.rate, config.run.length_s, images)
+    schedule = build_schedule(seed, args.scenario, args.rate, length_s, images)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     write_schedule_csv(schedule, out / "schedule.csv")
@@ -168,8 +180,8 @@ def main(argv: list[str] | None = None) -> None:
         "rate": args.rate,
         "round": args.round,
         "target": args.target,
-        "length_s": config.run.length_s,
-        "dropped_window_s": config.run.dropped_window_s,
+        "length_s": length_s,
+        "dropped_window_s": dropped_s,
         "achieved_rate_tolerance": config.run.achieved_rate_tolerance,
         "schedule_seed": seed,
     }
