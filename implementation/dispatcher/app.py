@@ -85,6 +85,9 @@ def create_app(
     client: httpx.AsyncClient | None = None
     log: list[dict] = []
     health = "warming up"  # then "ok", or "warm-up failed" for good
+    # Probes wait for the first client request, so idle workers are not probed
+    # while the orchestrator is still getting the run ready.
+    client_request_seen = False
     warmup_image = generate_image(config.images, config.seeds.image_set, "medium", 0)
     probe_image = generate_image(config.images, config.seeds.image_set, "small", 0)
 
@@ -177,6 +180,8 @@ def create_app(
         threshold_s = config.dispatcher.probe_threshold_s
         while True:
             await asyncio.sleep(threshold_s / 4)
+            if not client_request_seen:
+                continue
             for index, worker in enumerate(workers):
                 # A worker that never completed anything counts as idle.
                 last = worker.last_completion_s
@@ -219,6 +224,8 @@ def create_app(
 
     @app.post("/process")
     async def process_endpoint(request: Request) -> Response:
+        nonlocal client_request_seen
+        client_request_seen = True
         job = Job(
             request_id=request.headers.get(protocol.REQUEST_ID, ""),
             image_id=request.headers.get(protocol.IMAGE_ID, ""),
