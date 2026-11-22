@@ -69,7 +69,7 @@ class LocalBackend(Backend):
             if process.poll() is not None:
                 raise RuntimeError(f"{service} exited with code {process.returncode}")
             try:
-                if self.client.get(f"{self.urls[service]}/health").status_code == 200:
+                if is_healthy(service, self.client.get(f"{self.urls[service]}/health")):
                     return
             except httpx.HTTPError:
                 pass
@@ -127,6 +127,16 @@ class LocalBackend(Backend):
 
     def _log_path(self, service: str) -> Path:
         return IMPLEMENTATION / "local" / f"{service}.csv"
+
+
+def is_healthy(service: str, reply: httpx.Response) -> bool:
+    """True on 200, False while the service is still starting or warming up."""
+    if reply.status_code == 200:
+        return True
+    # The dispatcher keeps answering this for good once its warm-up has failed.
+    if reply.json().get("status") == "warm-up failed":
+        raise RuntimeError(f"{service} warm-up failed")
+    return False
 
 
 def _end(process: subprocess.Popen) -> None:

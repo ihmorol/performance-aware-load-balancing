@@ -124,7 +124,7 @@ One run follows the steps of "Orchestrator" in [spec.md](spec.md):
 
 1. Write a `started` row to the ledger.
 2. In scenario 3, apply the quota from `[quota]` to w2 and read it back. In scenarios 1 and 2, clear it.
-3. Restart w1 and w2 and wait for their health checks, then restart the dispatcher with the run's rule, scenario, rate, and run id and wait for its health check, which passes only after warm-up.
+3. Restart w1 and w2 and wait for their health checks, then restart the dispatcher with the run's rule, scenario, rate, and run id and wait for its health check, which passes only after warm-up. A failed warm-up fails the run at once.
 4. Read cpu.stat on both workers and the dispatcher CPU time, then start the samplers for the host, the dispatcher, and both workers.
 5. Run `python -m experiments.loadgen` against the dispatcher. A non-zero exit fails the run.
 6. Read cpu.stat and the dispatcher CPU time again, stop the samplers, and have the dispatcher and both workers write their logs into the run folder.

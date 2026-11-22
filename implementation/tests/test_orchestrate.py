@@ -4,10 +4,12 @@ import json
 import subprocess
 from pathlib import Path
 
+import httpx
 import pytest
 
 from experiments.backend import Backend
 from experiments.backends import BACKENDS
+from experiments.local_backend import is_healthy
 from experiments.orchestrate import Condition, run_condition, run_round
 from experiments.orchestrate import main as orchestrate_main
 from plb.config import load_config
@@ -239,6 +241,13 @@ def test_throw_out_only_appends_a_thrown_out_row(tmp_path):
     assert {k: rows[2][k] for k in ("stage", "round", "scenario", "rule", "rate", "attempt", "run_id", "reason")} == {
         "stage": "pilot", "round": "1", "scenario": "1", "rule": "rr", "rate": "1", "attempt": "1",
         "run_id": "r1-s1-rr-1-a1", "reason": "host was busy"}
+
+
+def test_a_health_reply_is_ok_on_200_waits_while_warming_up_and_fails_after_a_failed_warm_up():
+    assert is_healthy("w1", httpx.Response(200, json={"status": "ok"}))
+    assert not is_healthy("dispatcher", httpx.Response(503, json={"status": "warming up"}))
+    with pytest.raises(RuntimeError, match="dispatcher warm-up failed"):
+        is_healthy("dispatcher", httpx.Response(503, json={"status": "warm-up failed"}))
 
 
 def test_scenario_3_on_a_backend_without_quota_records_unsupported(tmp_path):
