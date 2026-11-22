@@ -9,7 +9,7 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 - `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), the seeded image set generator (`plb.images`), and the per-run summary (`plb.summary`).
 - `worker/`: the image processing service. Built.
 - `dispatcher/`: routing rules and the forwarding path. Built.
-- `experiments/`: the load generator is built. The orchestrator and pilot tools are not built yet. The per-run summary lives in `plb.summary`.
+- `experiments/`: the load generator and the orchestrator with its local backend are built. The SSH backend and the pilot tools are not built yet. The per-run summary lives in `plb.summary`.
 - `setup/`: VM setup guide, systemd units, and scripts. Not built yet.
 - `config/dev.toml`: development values for localhost. They are not pilot results.
 - `tests/`: the test suite.
@@ -104,6 +104,45 @@ The run folder gets three files from the generator. `schedule.csv` (`request_id,
 - `max_send_lag_ms` is the largest send lag in the window.
 
 A value that can't be computed, such as p95 with no successes, is null.
+
+## Orchestrator
+
+```bash
+python -m experiments.orchestrate run --backend local --config config/dev.toml \
+    --scenario 2 --rule feedback --rate 2 --round 0 --results local/results
+python -m experiments.orchestrate round --backend local --config config/dev.toml \
+    --round 1 --run-length 5 --results local/results
+python -m experiments.orchestrate throw-out --backend local --config config/dev.toml \
+    --run-id r1-s2-feedback-2-a1 --reason "..." --results local/results
+```
+
+`--results` defaults to `../results`, relative to this folder. Runs on a laptop should use `--results local/results`, so they never land in `results/` and can't be mistaken for measurements. `--run-length` shortens the run and is refused in the main stage. The config is loaded before any backend starts, so a main stage config with an unset value or a dirty working tree is refused before any service runs.
+
+The local backend starts every service as a process on this machine with the ports from `config.addresses`. It has no cgroups, so the quota and cpu.stat operations return `unsupported`, and metadata.json records them that way. The backends are listed in `experiments/backends.py`.
+
+One run follows the steps of "Orchestrator" in [spec.md](spec.md):
+
+1. Write a `started` row to the ledger.
+2. In scenario 3, apply the quota from `[quota]` to w2 and read it back. In scenarios 1 and 2, clear it.
+3. Restart w1 and w2 and wait for their health checks, then restart the dispatcher with the run's rule, scenario, rate, and run id and wait for its health check, which passes only after warm-up.
+4. Read cpu.stat on both workers and the dispatcher CPU time, then start the samplers for the host, the dispatcher, and both workers.
+5. Run `python -m experiments.loadgen` against the dispatcher. A non-zero exit fails the run.
+6. Read cpu.stat and the dispatcher CPU time again, stop the samplers, and have the dispatcher and both workers write their logs into the run folder.
+7. Write metadata.json (commit, config hash, seeds, quota, cpu.stat, dispatcher CPU time at start and end, time of each step) and summary.json.
+8. Write a `finished` row. Any error in steps 2 to 7 writes `failed` with the error text instead. The backend stops every service and sampler in either case.
+
+The ledger is `<results>/ledger.csv`. Rows are only ever appended. Its columns are `timestamp_unix_s, stage, round, scenario, rule, rate, attempt, run_id, status, reason`, and status is `started`, `finished`, `failed`, or `thrown_out`. The run id is `r<round>-s<scenario>-<rule>-<rate>-a<attempt>`, such as `r1-s2-feedback-2-a1`. Each attempt gets its own run id, also one cut off by Ctrl+C.
+
+A round is every scenario with its three rates from `[rates]`, times the four rules: 36 conditions. They are shuffled with the seed `"<seeds.round_order>:<round>"`, and the seed and order are saved to `round-<n>-order.json` before the first run. Conditions the ledger already marks finished in that stage and round are skipped, so a round stopped with Ctrl+C can be started again with the same command. A failed run is run once more at the end of the round, and both attempts stay in the ledger. `round` exits 0 only when all 36 conditions are finished.
+
+Run folders:
+
+- main stage: `<results>/<scenario folder>/<run id>/`
+- pilot stage: `<results>/pilot/<scenario folder>/<run id>/`, with the round order files in `<results>/pilot/`
+
+The scenario folders are `scenario-1-uniform`, `scenario-2-mixed`, and `scenario-3-degraded-worker`, as in [results/README.md](../results/README.md). Each run folder holds `schedule.csv`, `generator.csv`, `loadgen.json`, `dispatcher.csv`, `worker-w1.csv`, `worker-w2.csv`, `sampler-host.csv`, `sampler-dispatcher.csv`, `sampler-w1.csv`, `sampler-w2.csv`, `metadata.json`, and `summary.json`.
+
+`throw-out` appends a `thrown_out` row with the reason for a run already in the ledger. It changes nothing else.
 
 ## Before running experiments
 
