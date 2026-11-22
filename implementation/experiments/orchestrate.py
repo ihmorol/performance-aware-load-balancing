@@ -4,8 +4,8 @@
         --scenario 2 --rule feedback --rate 2 --round 0 --results local/results
     python -m experiments.orchestrate round --backend local --config config/dev.toml \\
         --round 1 --run-length 5 --results local/results
-    python -m experiments.orchestrate throw-out --backend local --config config/dev.toml \\
-        --run-id r1-s2-feedback-2-a1 --reason "..." --results local/results
+    python -m experiments.orchestrate throw-out --run-id r1-s2-feedback-2-a1 \\
+        --reason "..." --results local/results
 
 The steps of one run follow "Orchestrator" in implementation/spec.md. Each
 run writes a started row to <results>/ledger.csv, then a finished or failed row.
@@ -253,26 +253,18 @@ def main(argv: list[str] | None = None) -> None:
     round_parser = commands.add_parser("round", help="run the 36 conditions of a round")
     throw_parser = commands.add_parser("throw-out", help="mark a run as thrown out in the ledger")
     for sub in (run_parser, round_parser, throw_parser):
+        sub.add_argument("--results", default="../results", help="results folder, relative to implementation/")
+    for sub in (run_parser, round_parser):
         sub.add_argument("--backend", required=True, choices=sorted(BACKENDS))
         sub.add_argument("--config", required=True, help="config TOML file")
-        sub.add_argument("--results", default="../results", help="results folder, relative to implementation/")
+        sub.add_argument("--round", type=int, required=True)
+        sub.add_argument("--run-length", type=float, help="run length in seconds, pilot stage only")
     run_parser.add_argument("--scenario", type=int, required=True, choices=(1, 2, 3))
     run_parser.add_argument("--rule", required=True, choices=RULES)
     run_parser.add_argument("--rate", type=float, required=True, help="requests per second")
-    for sub in (run_parser, round_parser):
-        sub.add_argument("--round", type=int, required=True)
-        sub.add_argument("--run-length", type=float, help="run length in seconds, pilot stage only")
     throw_parser.add_argument("--run-id", required=True)
     throw_parser.add_argument("--reason", required=True)
     args = parser.parse_args(argv)
-
-    # The main-stage guards: a config with an unset value or a dirty working
-    # tree is refused here, before any backend exists.
-    try:
-        config = load_config(args.config)
-    except ConfigError as exc:
-        parser.error(str(exc))
-    config_path = Path(args.config).resolve()
     results = IMPLEMENTATION / args.results
 
     if args.command == "throw-out":
@@ -282,6 +274,14 @@ def main(argv: list[str] | None = None) -> None:
         run = {key: rows[-1][key] for key in LEDGER_COLUMNS if key not in ("timestamp_unix_s", "status", "reason")}
         append_ledger(results, {**run, "status": "thrown_out", "reason": args.reason})
         return
+
+    # The main-stage guards: a config with an unset value or a dirty working
+    # tree is refused here, before any backend exists.
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        parser.error(str(exc))
+    config_path = Path(args.config).resolve()
 
     if config.stage == "main" and args.run_length is not None:
         parser.error("--run-length is for the pilot stage; main runs use run.length_s")

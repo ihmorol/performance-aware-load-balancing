@@ -233,8 +233,8 @@ def test_throw_out_only_appends_a_thrown_out_row(tmp_path):
     config = load_config(DEV_CONFIG)
     run_condition(config, DEV_CONFIG, tmp_path, 1, Condition(1, "rr", 1.0), 1, FakeBackend(), load=fake_load)
 
-    orchestrate_main(["throw-out", "--backend", "local", "--config", str(DEV_CONFIG),
-                      "--results", str(tmp_path), "--run-id", "r1-s1-rr-1-a1", "--reason", "host was busy"])
+    orchestrate_main(["throw-out", "--results", str(tmp_path), "--run-id", "r1-s1-rr-1-a1",
+                      "--reason", "host was busy"])
 
     rows = read_ledger(tmp_path)
     assert [row["status"] for row in rows] == ["started", "finished", "thrown_out"]

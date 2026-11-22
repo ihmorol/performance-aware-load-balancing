@@ -112,8 +112,8 @@ python -m experiments.orchestrate run --backend local --config config/dev.toml \
     --scenario 2 --rule feedback --rate 2 --round 0 --results local/results
 python -m experiments.orchestrate round --backend local --config config/dev.toml \
     --round 1 --run-length 5 --results local/results
-python -m experiments.orchestrate throw-out --backend local --config config/dev.toml \
-    --run-id r1-s2-feedback-2-a1 --reason "..." --results local/results
+python -m experiments.orchestrate throw-out --run-id r1-s2-feedback-2-a1 \
+    --reason "..." --results local/results
 ```
 
 `--results` defaults to `../results`, relative to this folder. Runs on a laptop should use `--results local/results`, so they never land in `results/` and can't be mistaken for measurements. `--run-length` shortens the run and is refused in the main stage. The config is loaded before any backend starts, so a main stage config with an unset value or a dirty working tree is refused before any service runs.
