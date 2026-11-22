@@ -75,6 +75,8 @@ python -m dispatcher --config config/dev.toml --rule rr --scenario 1 --rate 2 --
 
 The rules, the EWMA estimate, warm-up, and probes follow the "Dispatcher" section of [spec.md](spec.md). On a tie, every rule picks the worker it did not pick last time, and the first tie goes to w1.
 
+Under the feedback rule, probes start only after the first client request has reached `/process`. Warm-up requests don't count. So idle workers are not probed, and their estimates don't move, while a run is still being set up.
+
 ## Load generator and summary
 
 ```bash
@@ -90,10 +92,12 @@ The target takes the same POST as the worker's `/process`, so a worker can stand
 - Each request carries `X-Request-Id`, `X-Image-Id`, and `X-Size-Class`, with the image bytes as the body. The images are drawn in memory from `seeds.image_set`.
 - A request with no reply within `generator.timeout_ms` is a timeout. The run ends when every request has an outcome. A 200 is success, 503 is rejected, 504 with `X-Outcome: expired` is expired, any other 504 is timeout, and any other status or a connection error is error.
 - Response time is the time the reply arrived (or the timeout fired) minus the planned send time. Send lag is the actual send time minus the planned one.
+- `--rate` must be above 0.
+- `--run-length <s>` replaces `run.length_s` for a short pilot or development run, and W shrinks by the same share. With `config/dev.toml` (30 s, W 5 s), `--run-length 5` gives W ≈ 0.833 s. A `main` stage config refuses the flag.
 
-The run folder gets three files from the generator. `schedule.csv` (`request_id, planned_offset_s, image_id, size_class`) is written before sending, and the same seed always gives the same bytes. `generator.csv` has one row per request with the columns in `plb.rows.GENERATOR_LOG_COLUMNS`. Chosen worker, processing time, and output size come from the reply headers and stay empty when the reply has none. `loadgen.json` holds the run parameters: run id, rule, scenario, rate, round, target, run length, dropped window, tolerance, and the schedule seed.
+The run folder gets three files from the generator. `schedule.csv` (`request_id, planned_offset_s, image_id, size_class`) is written before sending, and the same seed always gives the same bytes. `generator.csv` has one row per request with the columns in `plb.rows.GENERATOR_LOG_COLUMNS`. Chosen worker, processing time, and output size come from the reply headers and stay empty when the reply has none. `loadgen.json` holds the run parameters: run id, rule, scenario, rate, round, target, the run length and dropped window actually used, tolerance, and the schedule seed.
 
-`plb.summary` reads only `generator.csv` and `loadgen.json` and writes `summary.json`. The measured window is every request planned at or after `run.dropped_window_s` (W), and its length is the run length minus W.
+`plb.summary` reads `generator.csv` and `loadgen.json`, plus `dispatcher.csv` and `metadata.json` when the run folder has them, and writes `summary.json`. The measured window is every request planned at or after the dropped window W from `loadgen.json`, and its length is the run length minus W. A W as long as the run or longer is an error.
 
 - `measured` and `successes` count requests in the measured window.
 - `mean_ms` and `p95_ms` cover successful requests only. p95 is the nearest rank: sort, then take the value at position ceil(0.95 × n).
@@ -102,8 +106,20 @@ The run folder gets three files from the generator. `schedule.csv` (`request_id,
 - `failures` counts rejected, expired, timeout, and error.
 - `planned_rate` counts requests planned in the window and `achieved_rate` counts requests actually sent in the window, both divided by its length. `rate_flag` is true when the two differ by more than `run.achieved_rate_tolerance` of the planned rate. Comparing with the schedule instead of the offered rate means the random spread of a Poisson schedule never sets the flag. The flag is also true when nothing was planned in the window.
 - `max_send_lag_ms` is the largest send lag in the window.
+- `mean_select_ns` is the mean `select_ns` over the dispatcher rows of measured requests, without warm-up requests and probes.
+- `probe_count` counts the probe rows in the dispatcher log.
+- `dispatcher_cpu_s` is the dispatcher CPU time at the end of the run minus the time at the start, from `metadata.json`.
+- `throttling` gives, for each worker, the change in each cpu.stat counter (`nr_periods`, `nr_throttled`, `throttled_usec`). It is null when `cpu_stat` in `metadata.json` is `"unsupported"`, as on the local backend.
 
-A value that can't be computed, such as p95 with no successes, is null.
+Response times come only from `generator.csv`, so warm-up and probe rows never enter them. A value that can't be computed, such as p95 with no successes, is null. Without `dispatcher.csv` or `metadata.json`, as in a run sent straight to a worker, the fields that need them are null too.
+
+The resource sampler writes one CSV row per interval:
+
+```bash
+python -m experiments.sampler --out local/sampler-host.csv --interval 1 --pid <service pid>
+```
+
+The columns are `timestamp_unix_s, cpu_total_percent, cpu_process_percent, ram_used_mb`. `cpu_process_percent` is the `--pid` process's CPU as a percent of one CPU, as psutil gives it, and stays empty without `--pid`. Every row is flushed at once, so a killed sampler keeps the rows it wrote. It runs until it is killed, or stops by itself when the `--pid` process ends.
 
 ## Before running experiments
 

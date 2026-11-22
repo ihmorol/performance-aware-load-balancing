@@ -15,6 +15,7 @@ from experiments.loadgen import main as loadgen_main
 from experiments.loadgen import send_schedule
 from experiments.schedule import PlannedRequest
 from plb.rows import GENERATOR_LOG_COLUMNS
+from test_config import committed_repo, full_main_config_text
 
 
 def stub_app(delay_s, status=200, headers=None):
@@ -229,12 +230,12 @@ schedule = 1
 """
 
 
-def run_loadgen(tmp_path, url, out, rule="rr", round_number=1, config_text=TEST_CONFIG):
+def run_loadgen(tmp_path, url, out, rule="rr", round_number=1, config_text=TEST_CONFIG, rate="6", extra=()):
     config_path = tmp_path / "test.toml"
     config_path.write_text(config_text, encoding="utf-8")
     loadgen_main([
-        "--config", str(config_path), "--target", url, "--scenario", "2", "--rate", "6",
-        "--round", str(round_number), "--rule", rule, "--run-id", "cli-run", "--out", str(out),
+        "--config", str(config_path), "--target", url, "--scenario", "2", "--rate", rate,
+        "--round", str(round_number), "--rule", rule, "--run-id", "cli-run", "--out", str(out), *extra,
     ])
     return out
 
@@ -285,4 +286,37 @@ def test_an_unset_config_value_stops_the_run_before_sending(tmp_path, capsys):
         run_loadgen(tmp_path, "http://127.0.0.1:9/process", tmp_path / "run", config_text=config_text)
 
     assert "generator.timeout_ms" in capsys.readouterr().err
+    assert not (tmp_path / "run").exists()
+
+
+def test_run_length_flag_shortens_the_run_and_scales_the_dropped_window(tmp_path):
+    with serving(stub_app(delay_s=0)) as url:
+        out = run_loadgen(tmp_path, url, tmp_path / "run", rate="20", extra=["--run-length", "0.5"])
+
+    info = json.loads((out / "loadgen.json").read_text(encoding="utf-8"))
+    offsets = [float(s["planned_offset_s"]) for s in read_csv(out / "schedule.csv")]
+    # The config has a 1 s run with W = 0.2 s, so a 0.5 s run gets W = 0.1 s.
+    assert info["length_s"] == 0.5
+    assert info["dropped_window_s"] == pytest.approx(0.1)
+    assert offsets and max(offsets) < 0.5
+
+
+def test_a_main_stage_config_refuses_the_run_length_flag(tmp_path, capsys):
+    config_path = committed_repo(tmp_path, full_main_config_text())
+    with pytest.raises(SystemExit):
+        loadgen_main([
+            "--config", str(config_path), "--target", "http://127.0.0.1:9/process", "--scenario", "2",
+            "--rate", "2", "--round", "1", "--rule", "rr", "--run-id", "main-run",
+            "--out", str(tmp_path / "run"), "--run-length", "5",
+        ])
+
+    assert "--run-length" in capsys.readouterr().err
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_rate_of_0_is_refused(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        run_loadgen(tmp_path, "http://127.0.0.1:9/process", tmp_path / "run", rate="0")
+
+    assert "--rate" in capsys.readouterr().err
     assert not (tmp_path / "run").exists()
