@@ -83,12 +83,12 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 ### Code layout
 
 - One shared Python package used by every part. It holds config loading and validation, the CSV row formats, the seeded image set generator, the nearest-rank percentile, and the per-run summary.
-- Code lives in the folders AGENTS.md already names: `implementation/worker/`, `implementation/dispatcher/`, `implementation/experiments/` (load generator, orchestrator, pilot tools, summary), `implementation/setup/` (VM guide, systemd units, scripts).
+- Code lives in the folders AGENTS.md already names: `implementation/worker/`, `implementation/dispatcher/`, `implementation/experiments/` (load generator, orchestrator, pilot tools; the per-run summary is in `plb.summary`), `implementation/setup/` (VM guide, systemd units, scripts).
 
 ### Config
 
 - One TOML file holds every tunable value: addresses, worker queue capacity, dispatcher timeout, generator timeout, EWMA weight, probe threshold T, warm-up count, dropped window W, run length, rates per scenario, weights per scenario, image classes and mixed proportion, quota and period, sampler interval, achieved-rate tolerance, bottleneck threshold, the spin-wait switch, and all seeds.
-- The config has a stage field: `pilot` or `main`. In `main`, every value must be set and the git working tree must be clean, or the orchestrator refuses to start.
+- The config has a stage field: `pilot` or `main`. In `main`, every value must be set, tracked files must have no uncommitted changes, and no `.py` or `.toml` file may be untracked, or the orchestrator refuses to start. Run outputs and other untracked files are allowed.
 - Every run records the commit id and a SHA-256 hash of the config file in its metadata.
 
 ### Image set and operation
@@ -120,17 +120,17 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 ### Dispatcher
 
 - One forwarding path: receive, select, forward, return. The rule is chosen at start-up from the run parameters.
-- Per-worker state: unfinished count, EWMA estimate, last completion time, probe in flight. One shared tie counter.
+- Per-worker state: unfinished count, EWMA estimate, last completion time. One shared value: the worker picked on the previous select() call.
 - Unfinished count goes up by one when a request (or probe) is assigned and down by one on any terminal outcome: success, 503, expired, other error, or timeout.
 - `select()` is a pure function: it takes a snapshot of the state and returns the chosen worker and the updated rule state. It is timed with `time.perf_counter_ns`.
 - Round-robin: strict alternation.
 - Weighted round-robin: smooth weighted round-robin with the calibrated integer weights for the scenario. Each pick adds each worker's weight to its current value, picks the larger current value, and subtracts the total weight from the chosen one.
 - Least unfinished requests: the worker with fewer unfinished requests.
 - Feedback rule: the worker with the smaller (unfinished + 1) × estimate.
-- Ties in any rule alternate between workers using the tie counter.
+- Ties in any rule go to the worker that was not picked on the previous select() call. The first tie goes to w1 (`notes/decisions.md`, 2026-11-21).
 - EWMA: estimate = (1 − a) × estimate + a × newest processing time. A worker's first sample sets its estimate directly; the update applies from the second sample on. Starting from zero instead would leave the estimate far too low after a short warm-up (with a = 0.2 and three samples, about 49% of the true time). Samples are worker-reported processing times from successful replies, warm-up replies, and probe replies. The weight a is a pilot value. The estimate is updated under every rule (it is cheap), but only the feedback rule reads it.
 - Warm-up: at start-up, before reporting healthy, the dispatcher sends the same K requests (one fixed medium image) to each worker. Their times seed the estimates. If any warm-up request fails, the dispatcher stays unhealthy and the orchestrator marks the run failed. K is a pilot value. Warm-up requests are logged with a flag and never enter the summary.
-- Probe, feedback rule only: a background check looks at each worker. If a worker has had no completion for T seconds, has no unfinished requests, and has no probe in flight, the dispatcher sends one fixed small image. The probe counts as unfinished, its time enters the estimate, and it is logged with a probe flag. T is a pilot value.
+- Probe, feedback rule only: a background check looks at each worker every T/4 seconds, from the first client request on. If a worker has had no completion for T seconds and has no unfinished requests, the dispatcher sends one fixed small image, one probe at a time. T counts from the first client request at the earliest, so the wait between warm-up and the load never decides whether a run starts with a probe. The probe counts as unfinished, its time enters the estimate, and it is logged with a probe flag. T is a pilot value.
 - No retries.
 - Dispatcher timeout D is fixed per run from config.
 - Dispatcher log, one row per request or probe: run id, rule, scenario, rate, request id, image id, size class, probe flag, warm-up flag, chosen worker, both unfinished counts and both estimates at decision time, select time in nanoseconds, worker processing time, worker status, outcome, time inside the dispatcher. Held in memory and written to CSV on the orchestrator's request and on shutdown.
@@ -169,7 +169,7 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
   6. Read cpu.stat and dispatcher CPU time again. Stop the samplers. Ask the dispatcher and workers to write their logs. Copy every file to the host.
   7. Write the run metadata (commit, config hash, seeds, counters, CPU times, timings) and the per-run summary.
   8. Mark the run finished, or failed with a reason, in the ledger.
-- A round runner shuffles the 36 conditions of each round with a saved seed and runs them in that order. On restart it reads the ledger and skips finished runs. A failed run is rerun at the end of its round and both attempts stay in the ledger.
+- A round runner shuffles the 36 conditions of each round with a saved seed and runs them in that order. On restart it reads the ledger and skips finished runs. A failed run is rerun at the end of its round and both attempts stay in the ledger. A run tried before a restart (failed, or cut off by Ctrl+C) also waits for the end of the round.
 
 ### Results layout
 
