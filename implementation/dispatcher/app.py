@@ -110,7 +110,9 @@ def create_app(
             )
         except TimeoutError:
             return Result(protocol.TIMEOUT, None)
-        except httpx.HTTPError:
+        except Exception:
+            # A connection error, a bad address, anything else: an error
+            # outcome with a log row, never a crash of warm-up or a probe.
             return Result(protocol.ERROR, None)
         finally:
             worker.unfinished -= 1
@@ -183,9 +185,8 @@ def create_app(
             if not client_request_seen:
                 continue
             for index, worker in enumerate(workers):
-                # A worker that never completed anything counts as idle.
-                last = worker.last_completion_s
-                idle = last is None or time.perf_counter() - last >= threshold_s
+                # Set for every worker by the first client request.
+                idle = time.perf_counter() - worker.last_completion_s >= threshold_s
                 if idle and worker.unfinished == 0:
                     # Awaited, not a task: the probe counts as unfinished at
                     # once, and no probe can be in flight during a check.
@@ -214,18 +215,28 @@ def create_app(
             yield
         finally:
             background.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await background
-            await client.aclose()
-            if shutdown_log_path is not None:
-                write_log(log, shutdown_log_path)
+            try:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await background
+            finally:
+                # The log is the run's data, so it is written even if the
+                # background task ended with an error.
+                await client.aclose()
+                if shutdown_log_path is not None:
+                    write_log(log, shutdown_log_path)
 
     app = FastAPI(lifespan=lifespan)
 
     @app.post("/process")
     async def process_endpoint(request: Request) -> Response:
         nonlocal client_request_seen
-        client_request_seen = True
+        if not client_request_seen:
+            client_request_seen = True
+            # T counts from the load's first request, so the wait between
+            # warm-up and the load can't decide whether a run starts with a probe.
+            now = time.perf_counter()
+            for worker in workers:
+                worker.last_completion_s = now
         job = Job(
             request_id=request.headers.get(protocol.REQUEST_ID, ""),
             image_id=request.headers.get(protocol.IMAGE_ID, ""),
