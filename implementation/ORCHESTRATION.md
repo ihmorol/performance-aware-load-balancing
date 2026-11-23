@@ -10,8 +10,10 @@ How a Claude orchestrator agent builds `implementation/spec.md` one issue at a t
 | #3 | Dispatcher with the four routing rules | 2 | #2 | Yes, with #4 |
 | #4 | Open-loop load generator and response-time summary | 2 | #2 | Yes, with #3 |
 | #5 | Local orchestrator, monitoring, and round runner | 3 | #3, #4 | No (only issue in wave 3) |
-| #6 | VM deployment and SSH backend | 4 | #5 | Yes, with #7 |
-| #7 | Pilot, calibration, and dry-run tools | 4 | #5 | Yes, with #6 |
+| #6 | VM deployment and SSH backend | 4 | #5, #19 | Yes, with #7 |
+| #7 | Pilot, calibration, and dry-run tools | 4 | #5, #19 | Yes, with #6 |
+
+#19 (move the main runs from the teammate's PC to cloud VMs, added 2026-11-23) is a docs and decision issue, not a build slice. It closes when its docs PR is merged.
 
 ```mermaid
 graph LR
@@ -21,6 +23,8 @@ graph LR
   I4 --> I5
   I5 --> I6["#6 VM deployment and SSH backend"]
   I5 --> I7["#7 Pilot, calibration, and dry-run tools"]
+  I19["#19 Main runs move to cloud VMs"] --> I6
+  I19 --> I7
 ```
 
 ## Why the waves look like this
@@ -45,13 +49,16 @@ graph LR
 6. Start the next wave only after every issue in the current wave is merged into `main`. Before starting it, pull `main` and run `python -m pytest` from `implementation/`; it must pass.
 7. If verification fails, fix it on the same branch inside the same issue. Never skip ahead to a later issue or wave, and never close an issue with a failing check. If a fix needs a change outside the issue's scope, or a check can't pass in the agent's environment, stop and ask the owner. Don't work around it.
 8. All prose (README sections, PR descriptions, comments) follows the AGENTS.md writing rules. Never describe a planned experiment as done.
-9. After wave 4, stop and hand over to the owner. The steps below need a person at the experiment PC.
+9. Wave 4 starts only after #19 (main runs move to cloud VMs) is closed. Read #19 and `implementation/cloud-deployment.md` first; the update sections at the top of #6 and #7 list the extra scope.
+10. After wave 4, stop and hand over to the owner. The steps below need a person logged in to the cloud VMs.
 
 ## Manual steps after wave 4 (not issues)
 
-These need the teammate's PC with VirtualBox. An agent can't do them.
+These run on the four cloud VMs from `implementation/cloud-deployment.md`, not on the teammate's PC, which will not be used. An agent can't do them, because they need a cloud account and a payment card or student verification.
 
-- [ ] Hardware check for #6: build the three VMs from `implementation/setup/README.md`, run one `orchestrate run --backend ssh` per scenario, and confirm the scenario 3 run shows a rising nr_throttled.
+- [ ] Check the payment cards with the bank. Google Cloud needs one; if none works, use Azure for Students.
+- [ ] Sign up, record the sign-up date in `notes/decisions.md`, check the CPU and address quota, and create the four VMs.
+- [ ] Hardware check for #6: set up the VMs from `implementation/setup/README.md`, run one `orchestrate run --backend ssh` per scenario from the generator VM, and confirm the scenario 3 run shows a rising nr_throttled.
 - [ ] Run the pilot steps from #7 in the order of the spec's "Pilot and calibration" table and record each value with its method in `notes/decisions.md`.
 - [ ] Fill the config, set its stage to `main`, commit it, and record the commit id.
 - [ ] Run `experiments.pilot dry-run --backend ssh` and fix anything until it prints PASS.
@@ -60,10 +67,11 @@ These need the teammate's PC with VirtualBox. An agent can't do them.
 ## Progress
 
 - [x] #2 Worker service with seeded image set (wave 1), merged in #10
-- [ ] #3 Dispatcher with the four routing rules (wave 2)
-- [ ] #4 Open-loop load generator and response-time summary (wave 2)
-- [ ] #5 Local orchestrator, monitoring, and round runner (wave 3)
+- [x] #3 Dispatcher with the four routing rules (wave 2), merged in #15
+- [x] #4 Open-loop load generator and response-time summary (wave 2), merged in #16
+- [x] #5 Local orchestrator, monitoring, and round runner (wave 3), merged in #17 and #18
+- [ ] #19 Move the main runs from the teammate's PC to cloud VMs (docs, before wave 4)
 - [ ] #6 VM deployment and SSH backend (wave 4)
 - [ ] #7 Pilot, calibration, and dry-run tools (wave 4)
 
-Progress is tracked on issue #8. This list is a copy, last updated 2026-11-21.
+Progress is tracked on issue #8. This list is a copy, last updated 2026-11-23.

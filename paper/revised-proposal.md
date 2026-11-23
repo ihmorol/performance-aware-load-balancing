@@ -20,7 +20,7 @@ The contribution is the comparison. In our search (18 papers, `paper/literature/
 2. Reports p95 per run and p95 per image size class, so we can see whether small images wait behind large ones under each rule.
 3. Charges the feedback rule for its monitoring cost: probe requests, dispatcher CPU, and time spent choosing a worker.
 
-We claim this only for our setup: two workers and one dispatcher on one host, one image workload.
+We claim this only for our setup: two workers and one dispatcher on cloud VMs of one machine type in one zone, one image workload.
 
 ## Objectives
 
@@ -28,7 +28,7 @@ Unchanged from slide 4: build the testbed, implement the four rules, run repeata
 
 ## System
 
-Unchanged from the frozen proposal. Three Ubuntu Server VMs on VirtualBox on one host (13.9 GB RAM, 12 logical CPUs per the frozen documents): a dispatcher (1 GB, 1 vCPU) and two workers (2 GB, 1 vCPU each) on a host-only network. Python asyncio, FastAPI, HTTPX on the dispatcher; FastAPI and Pillow on the workers. Each worker processes one image at a time and holds a bounded queue. The worker returns its processing time with every reply.
+The frozen proposal planned three Ubuntu Server VMs on VirtualBox on one host (13.9 GB RAM, 12 logical CPUs): a dispatcher (1 GB, 1 vCPU) and two workers (2 GB, 1 vCPU each) on a host-only network. Changed on 2026-11-23 because that PC lacks free RAM: the VMs are rented from a cloud provider, four in one zone on one private network (a load generator VM, the dispatcher, and two workers, 1 vCPU each, the workers on the same machine type). Google Cloud is the first choice and Azure for Students the fallback (`implementation/cloud-deployment.md`, issue #19). The paper states the provider, machine type, and RAM actually used. Python asyncio, FastAPI, HTTPX on the dispatcher; FastAPI and Pillow on the workers. Each worker processes one image at a time and holds a bounded queue. The worker returns its processing time with every reply.
 
 ## The four rules
 
@@ -74,7 +74,7 @@ A result against any of these gets the same care in the paper as one that suppor
 ## What we do not claim
 
 - A new algorithm.
-- Results for public clouds, clusters, or more than two workers.
+- Results for other cloud providers, other machine types, clusters, or more than two workers. The runs use one provider's VMs, which share physical machines with other customers.
 - That a CPU quota behaves like a slower CPU.
 - That SED is optimal. Theory says it is not exactly optimal.
 - Adaptation to a worker whose speed changes during a run.
