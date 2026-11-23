@@ -1,0 +1,8 @@
+# /etc/sudoers.d/plb: the only root commands the orchestrator runs on a VM.
+# setup/provision.sh installs it with mode 0440 and checks it with visudo.
+# The * lets set-property take the quota and period the config gives.
+plb ALL=(root) NOPASSWD: /usr/bin/systemctl restart plb-worker.service, \
+    /usr/bin/systemctl stop plb-worker.service, \
+    /usr/bin/systemctl set-property --runtime plb-worker.service *, \
+    /usr/bin/systemctl restart plb-dispatcher.service, \
+    /usr/bin/systemctl stop plb-dispatcher.service

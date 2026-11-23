@@ -1,0 +1,17 @@
+# Worker service, one per worker VM. Install with setup/provision.sh worker.
+# No CPU quota here: the orchestrator sets it at run time with
+# systemctl set-property --runtime, and only in scenario 3.
+
+[Unit]
+Description=plb worker (image resize service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plb
+WorkingDirectory=/home/plb/plb/implementation
+# Written by the orchestrator before every restart: PLB_CONFIG and PLB_PORT.
+EnvironmentFile=/home/plb/plb-run/plb-worker.env
+ExecStart=/home/plb/plb/implementation/.venv/bin/python -m worker --config ${PLB_CONFIG} --port ${PLB_PORT} --host 0.0.0.0 --log /home/plb/plb-run/worker-shutdown.csv
+Restart=no
