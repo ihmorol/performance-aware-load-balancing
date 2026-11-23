@@ -2,6 +2,11 @@
 
 A 10 minute read. The full version, with examples and more detail, is [team-guide.md](team-guide.md). No experiment has run yet; numbers here are plan settings or marked examples.
 
+> [!IMPORTANT]
+> Update 2026-11-23: the teammate's PC will not be used, because it doesn't have enough free RAM for the VMs. The pilot, the dry run, and the main runs move to four cloud VMs (`plb-gen`, `plb-disp`, `plb-w1`, `plb-w2`, 1 vCPU each). Google Cloud is the first choice but needs a card; Azure for Students is the fallback. See [implementation/cloud-deployment.md](../implementation/cloud-deployment.md) and issue #19. Section 3 below still shows the old VirtualBox picture.
+>
+> বাংলায়: teammate-এর PC আর ব্যবহার হবে না। চারটা cloud VM-এ সব run হবে। Google Cloud-এ card লাগে, card না চললে Azure for Students। বিস্তারিত `implementation/cloud-deployment.md` আর issue #19-এ।
+
 ## 1. The project
 
 We have a small image resizing service. A dispatcher receives every request (one JPEG each) and sends it to one of two workers. Each worker resizes one image at a time; the rest wait in a queue. We compare four ways the dispatcher can pick a worker, and ask: when images differ in size and workers differ in speed, does watching each worker's recent speed lower response time enough to pay for the extra monitoring?
@@ -68,15 +73,16 @@ Expected, written before any run: H1, with equal workers, feedback and least unf
 | Issue | Part | Status |
 |---|---|---|
 | #2 | Worker and shared code | Done |
-| #3 | Dispatcher with the four rules | To build |
-| #4 | Load generator and per-run summary | To build |
-| #5 | Orchestrator, monitoring, run ledger | To build |
-| #6 | VM setup guide and scripts | To build |
+| #3 | Dispatcher with the four rules | Done |
+| #4 | Load generator and per-run summary | Done |
+| #5 | Orchestrator, monitoring, run ledger | Done |
+| #19 | Move the main runs to cloud VMs (docs) | Open, before #6 and #7 |
+| #6 | Cloud VM setup guide and scripts | To build |
 | #7 | Pilot tools and dry run | To build |
 
-An agent can build #3 to #7 (#3 and #4 can go in parallel), and later the analysis scripts and plots.
+An agent can build #6 and #7 in parallel once #19 is closed, and later the analysis scripts and plots.
 
-Only we can: build the VMs on the teammate's PC with the guide from #6, run the pilot and record the values, run the 180 runs with the PC kept quiet, read the papers we cite, write and own the term paper (10 to 15 pages, at least 8 references), take screenshots for the demo, and explain every part in the defense. Check what the course allows for AI help in writing.
+Only we can: check that a card works for Google Cloud (or use Azure for Students), sign up, and create the cloud VMs with the guide from #6, run the pilot and record the values, run the 180 runs in one stretch and stop the VMs between sessions, read the papers we cite, write and own the term paper (10 to 15 pages, at least 8 references), take screenshots for the demo, and explain every part in the defense. Check what the course allows for AI help in writing.
 
 To hand out an issue, tell the agent: "Implement issue #3. Follow AGENTS.md and implementation/ORCHESTRATION.md, build it test-first, open a PR that closes #3, show the test output, and ask before merging."
 

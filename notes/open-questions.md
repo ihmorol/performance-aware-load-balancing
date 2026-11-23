@@ -20,3 +20,13 @@ The grilling session on 2026-11-19 settled the method for most items (see `decis
 - [x] Analysis: median with min and max over five runs; "clear" means non-overlapping ranges (see decisions.md)
 - [ ] Image size classes. Method: three classes with clearly separated median processing times. Open: class boundaries and the mixed proportion (needed for p95 per size class)
 - [ ] Achieved-rate tolerance for flagging a run. Method: from the send-accuracy check at the top rate. Open: the value
+
+## Cloud VMs (added 2026-11-23, issue #19)
+
+These are not pilot parameters, but the runs can't start until they are answered. Details are in `implementation/cloud-deployment.md`.
+
+- [ ] Payment card. Google Cloud's trial needs one. Open: whether a member's card is accepted. If none is, the provider becomes Azure for Students
+- [ ] Quota. Open: the trial's CPU and in-use address quota in the chosen region (Google does not publish it), or the real vCPU limit on Azure for Students
+- [ ] Machine type and zone. Plan: t2d-standard-1 in a us-central1 zone. Open: whether it is offered there for this account
+- [ ] Sign-up date. Open: the date the 90-day trial clock starts, recorded in `decisions.md`
+- [ ] Cost. Open: the real total, which depends on the run length the pilot sets

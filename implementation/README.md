@@ -1,6 +1,6 @@
 # Implementation workspace
 
-The planned system, per the proposal: one dispatcher VM (1 GB RAM, 1 vCPU) and two worker VMs (2 GB RAM, 1 vCPU each), all Ubuntu Server, running locally. Workers process image resize and recompression jobs. The dispatcher picks a worker by one of four rules: round-robin, weighted round-robin, least unfinished requests (least connections counted in requests), or recent processing time feedback.
+The planned system: one dispatcher VM and two worker VMs with 1 vCPU each, all Ubuntu Server, plus a fourth VM for the load generator and orchestrator. The proposal put three VMs on a teammate's PC; since 2026-11-23 they run on a cloud provider instead (Google Cloud first, Azure for Students as the fallback). See [cloud-deployment.md](cloud-deployment.md) and issue #19. Workers process image resize and recompression jobs. The dispatcher picks a worker by one of four rules: round-robin, weighted round-robin, least unfinished requests (least connections counted in requests), or recent processing time feedback.
 
 The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHESTRATION.md).
 
