@@ -314,6 +314,14 @@ def test_a_main_stage_config_refuses_the_run_length_flag(tmp_path, capsys):
     assert not (tmp_path / "run").exists()
 
 
+def test_a_rule_name_with_a_typo_is_refused(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        run_loadgen(tmp_path, "http://127.0.0.1:9/process", tmp_path / "run", rule="feedbak")
+
+    assert "--rule" in capsys.readouterr().err
+    assert not (tmp_path / "run").exists()
+
+
 def test_a_rate_of_0_is_refused(tmp_path, capsys):
     with pytest.raises(SystemExit):
         run_loadgen(tmp_path, "http://127.0.0.1:9/process", tmp_path / "run", rate="0")

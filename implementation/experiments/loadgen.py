@@ -24,6 +24,7 @@ from pathlib import Path
 
 import httpx
 
+from dispatcher.rules import RULES
 from experiments.schedule import PlannedRequest, build_schedule, schedule_seed, write_schedule_csv
 from plb import protocol
 from plb.config import load_config
@@ -128,7 +129,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--scenario", type=int, required=True, choices=(1, 2, 3))
     parser.add_argument("--rate", type=float, required=True, help="requests per second")
     parser.add_argument("--round", type=int, required=True)
-    parser.add_argument("--rule", required=True, help="the rule under test; recorded only")
+    parser.add_argument("--rule", required=True, choices=RULES, help="the rule under test; recorded only")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--out", required=True, help="run folder")
     parser.add_argument("--run-length", type=float,
