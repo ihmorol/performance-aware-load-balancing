@@ -6,3 +6,8 @@
 *.pdf binary
 *.pptx binary
 *.docx binary
+
+# Scripts, units, and the sudo rule run on Linux VMs.
+*.sh text eol=lf
+*.service text eol=lf
+implementation/setup/plb-sudoers text eol=lf

@@ -1,0 +1,70 @@
+# Values for the four cloud VMs from implementation/cloud-deployment.md, with
+# the same development values as dev.toml everywhere else. They are not pilot
+# results; the pilot replaces them. Check the internal addresses against the
+# real VMs before the first run. A key left out loads as unset, which only the
+# pilot stage allows.
+
+stage = "pilot"
+
+[addresses]
+dispatcher = "http://10.128.0.20:8100"
+workers = ["http://10.128.0.21:8101", "http://10.128.0.22:8102"]
+
+[worker]
+queue_capacity = 4
+
+[dispatcher]
+timeout_ms = 10000
+ewma_weight = 0.2
+probe_threshold_s = 5.0
+warmup_count = 3
+
+[generator]
+timeout_ms = 12000
+spin_wait = false
+
+[run]
+length_s = 30.0
+dropped_window_s = 5.0
+achieved_rate_tolerance = 0.05
+
+[rates]
+scenario1 = [1.0, 2.0, 3.0]
+scenario2 = [1.0, 2.0, 3.0]
+scenario3 = [1.0, 2.0, 3.0]
+
+# max_sum is a team choice for calibration, left unset here.
+[weights]
+scenario1 = [1, 1]
+scenario2 = [1, 1]
+scenario3 = [1, 1]
+
+[images]
+per_class = 5
+
+[images.resolutions]
+small = [640, 480]
+medium = [1920, 1080]
+large = [3840, 2160]
+
+[images.mix]
+small = 0.4
+medium = 0.4
+large = 0.2
+
+# The CPU quota can't be applied on localhost, so it stays unset here.
+[quota]
+
+[monitoring]
+sampler_interval_s = 1.0
+bottleneck_cpu_percent = 80.0
+
+[seeds]
+image_set = 1
+schedule = 1
+round_order = 1
+
+# The orchestrator on plb-gen logs in to the other three VMs with this key.
+[ssh]
+user = "plb"
+key_path = "~/.ssh/plb"

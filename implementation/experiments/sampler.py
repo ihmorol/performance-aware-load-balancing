@@ -2,8 +2,9 @@
 
     python -m experiments.sampler --out local/sampler-host.csv --interval 1 --pid 1234
 
-Each row holds the wall-clock time, total CPU, CPU of the --pid process, and
-RAM used. Without --pid the process column is empty. The sampler runs until
+Each row holds the wall-clock time, total CPU, CPU of the --pid process,
+RAM used, and CPU steal time. Steal is time a cloud host gave to other
+tenants; Linux reports it, other systems leave the column empty. Without --pid the process column is empty. The sampler runs until
 it is killed, or stops by itself when the --pid process ends.
 """
 
@@ -16,7 +17,7 @@ from pathlib import Path
 
 import psutil
 
-COLUMNS = ("timestamp_unix_s", "cpu_total_percent", "cpu_process_percent", "ram_used_mb")
+COLUMNS = ("timestamp_unix_s", "cpu_total_percent", "cpu_process_percent", "ram_used_mb", "cpu_steal_percent")
 
 
 def take_sample(process: psutil.Process | None) -> dict:
@@ -29,6 +30,8 @@ def take_sample(process: psutil.Process | None) -> dict:
         "cpu_total_percent": psutil.cpu_percent(),
         "cpu_process_percent": "" if process is None else process.cpu_percent(),
         "ram_used_mb": f"{psutil.virtual_memory().used / 2**20:.1f}",
+        # cpu_times_percent keeps its own counter, apart from cpu_percent.
+        "cpu_steal_percent": getattr(psutil.cpu_times_percent(), "steal", ""),
     }
 
 

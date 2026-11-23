@@ -1,0 +1,17 @@
+# Dispatcher service, on the dispatcher VM. Install with setup/provision.sh dispatcher.
+# No CPU quota here: only worker 2 ever gets one, at run time.
+
+[Unit]
+Description=plb dispatcher (routing rules)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plb
+WorkingDirectory=/home/plb/plb/implementation
+# Written by the orchestrator before every restart: PLB_CONFIG, PLB_PORT,
+# and the run's PLB_RULE, PLB_SCENARIO, PLB_RATE, and PLB_RUN_ID.
+EnvironmentFile=/home/plb/plb-run/plb-dispatcher.env
+ExecStart=/home/plb/plb/implementation/.venv/bin/python -m dispatcher --config ${PLB_CONFIG} --rule ${PLB_RULE} --scenario ${PLB_SCENARIO} --rate ${PLB_RATE} --run-id ${PLB_RUN_ID} --port ${PLB_PORT} --host 0.0.0.0 --log /home/plb/plb-run/dispatcher-shutdown.csv
+Restart=no
