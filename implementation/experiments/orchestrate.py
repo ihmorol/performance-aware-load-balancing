@@ -112,7 +112,8 @@ def run_condition(config: Config, config_path: Path, results: Path, round_: int,
     # Absolute, because the services and the load generator write into it from their own folder.
     folder = (stage_dir(results, config.stage) / SCENARIO_FOLDERS[condition.scenario] / run_id).resolve()
     ledger_row = {"stage": config.stage, "round": round_, "scenario": condition.scenario,
-                  "rule": condition.rule, "rate": f"{condition.rate:g}", "attempt": attempt,
+                  # str() keeps every digit, so resume reads back the exact rate.
+                  "rule": condition.rule, "rate": str(condition.rate), "attempt": attempt,
                   "run_id": run_id}
     append_ledger(results, {**ledger_row, "status": "started", "reason": ""})
     step_s = {}
@@ -229,9 +230,11 @@ def run_round(config: Config, results: Path, round_: int, run_one) -> bool:
     (folder / f"round-{round_}-order.json").write_text(json.dumps(saved, indent=2) + "\n", encoding="utf-8")
 
     finished, attempts = ledger_state(results, config.stage, round_)
-    failed = []
+    # A run tried before this start (failed, or cut off by Ctrl+C) waits for
+    # the end of the round, like a run that fails now.
+    failed = [c for c in order if c not in finished and attempts[c]]
     for condition in order:
-        if condition in finished:
+        if condition in finished or attempts[condition]:
             continue
         attempts[condition] += 1
         if run_one(condition, attempts[condition]):
