@@ -6,6 +6,11 @@ Read it in order the first time. Each section ends with a short Bangla summary. 
 
 No experiment has run yet. Every number in this guide is either a setting from the plan or a made-up example, and the made-up ones are marked as examples.
 
+> [!IMPORTANT]
+> Update 2026-11-23: the teammate's PC will not be used. It doesn't have enough free RAM for the VMs. The pilot, the dry run, and the 180 main runs move to four cloud VMs: Google Cloud first, or Azure for Students if no member's card works with Google. Sections 5, 6, 12, and 13 still describe the VirtualBox plan in places. Where they differ, follow `implementation/cloud-deployment.md` and issue #19. The ideas (VMs, SSH, services, the CPU quota) stay the same; only where the VMs live changes.
+>
+> বাংলায়: 2026-11-23 থেকে teammate-এর PC আর ব্যবহার হবে না, কারণ তাতে VM চালানোর মতো খালি RAM নেই। Pilot, dry run আর ১৮০টা run হবে চারটা cloud VM-এ। প্রথম পছন্দ Google Cloud, কারো card কাজ না করলে Azure for Students। নিচে যেখানে VirtualBox বা teammate-এর PC লেখা আছে, সেখানে `implementation/cloud-deployment.md` আর issue #19 মেনে চলবে।
+
 ## Contents
 
 1. The project in a few sentences
@@ -158,6 +163,8 @@ Our job is to measure which of these wins in our setup. If the feedback rule doe
 
 ## 5. Virtual machines from zero
 
+Since 2026-11-23 our VMs are rented from a cloud provider instead of made with VirtualBox (see the update at the top). Everything below about what a VM is, SSH, and services still applies.
+
 ### What a virtual machine is
 
 A virtual machine (VM) is a computer made of software that runs inside a real computer. The real computer is the host. Each VM is a guest. A guest gets its own operating system, its own share of CPU and memory, and its own network address. From inside, it looks and acts like a separate PC.
@@ -187,6 +194,9 @@ You don't need to understand how VirtualBox works inside. You need to be able to
 বাংলায়: Virtual machine হলো একটা আসল কম্পিউটারের ভেতরে software দিয়ে বানানো আলাদা কম্পিউটার। আসলটা host, ভেতরেরগুলো guest। VirtualBox দিয়ে VM বানাই, প্রতিটাকে নির্দিষ্ট RAM আর vCPU দেই, তারপর Ubuntu Server install করি। Host-only network দিয়ে host আর VM-গুলো নিজেদের মধ্যে যোগাযোগ করে। SSH দিয়ে VM-এ login করি, আর systemd service হিসেবে worker ও dispatcher চলে। VirtualBox-এর ভেতরের সব বোঝা লাগবে না; VM বানানো, install করা আর SSH দিয়ে ঢোকা জানলেই চলবে।
 
 ## 6. Our testbed
+
+> [!IMPORTANT]
+> Since 2026-11-23 the testbed is four cloud VMs in one zone, not VirtualBox on the teammate's PC: `plb-gen` (load generator and orchestrator, the "host" in this section), `plb-disp`, `plb-w1`, and `plb-w2`. Each has 1 vCPU. Details and setup steps are in `implementation/cloud-deployment.md`. The paragraphs below describe the earlier plan.
 
 The main runs happen on a teammate's PC with VirtualBox (12 logical CPUs, 13.9 GB RAM, per the frozen documents). Its host operating system is not confirmed yet. Code is written and tested on any laptop first, as plain programs on localhost, without VMs.
 
@@ -329,11 +339,14 @@ The build is split into GitHub issues. Issue #1 holds the full spec, and issue #
 | Issue | What it is, in plain words | Status |
 |---|---|---|
 | #2 | The shared settings code, the image generator, and the worker service | Done, merged |
-| #3 | The dispatcher with all four rules, warm-up, probes, and its log | Not started |
-| #4 | The load generator (schedule, open-loop sending) and the per-run summary | Not started |
-| #5 | The orchestrator that runs one whole run or a whole round on a laptop, plus the CPU and RAM samplers and the ledger | Not started |
-| #6 | The VM setup guide, service files, scripts, and the SSH version of the orchestrator | Not started |
+| #3 | The dispatcher with all four rules, warm-up, probes, and its log | Done, merged |
+| #4 | The load generator (schedule, open-loop sending) and the per-run summary | Done, merged |
+| #5 | The orchestrator that runs one whole run or a whole round on a laptop, plus the CPU and RAM samplers and the ledger | Done, merged |
+| #19 | Moving the main runs from the teammate's PC to cloud VMs (docs and decision) | Open, must close before #6 and #7 |
+| #6 | The cloud VM setup guide, service files, scripts, and the SSH version of the orchestrator | Not started |
 | #7 | One command per pilot step, plus the dry-run check | Not started |
+
+Status above updated 2026-11-23. Where the text below says "the teammate's PC", read "the cloud VMs".
 
 #3 and #4 can be built at the same time. #5 needs both. #6 and #7 come after #5 and can be built together.
 
@@ -352,6 +365,9 @@ What only works on the teammate's PC, after #6 and #7:
 বাংলায়: কাজগুলো GitHub issue-তে ভাগ করা। #2 (worker আর shared code) শেষ। বাকি আছে #3 dispatcher, #4 load generator ও summary, #5 orchestrator, #6 VM setup, #7 pilot tools। #3 আর #4 একসঙ্গে করা যায়। Analysis script আর term paper-এর জন্য এখনো issue নেই। VM বানানো, pilot, freeze, dry run আর ১৮০টা run teammate-এর PC-তে আমাদেরই করতে হবে।
 
 ## 13. Who does what
+
+> [!IMPORTANT]
+> Since 2026-11-23 the work "only we can do" happens on cloud VMs instead of the teammate's PC. We have to: check with the bank that a card works for international online USD payments (Google Cloud needs one), sign up only after #6 and #7 are merged, check the quota, create the four VMs, and stop them between sessions so the credit lasts. Installing VirtualBox and changing BIOS settings are no longer needed. The steps are in `implementation/cloud-deployment.md`.
 
 ### What an AI agent can do
 

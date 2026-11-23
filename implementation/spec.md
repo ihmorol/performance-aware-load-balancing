@@ -4,15 +4,17 @@ Written 2026-11-19 from a grilling session with the owner. It covers the work fr
 
 When this was written nothing was built. Issue #2 (shared package and worker) has been merged since; the README in this folder lists what exists. No number in this file is a measurement. Values the pilot decides are marked "pilot" with the rule the pilot uses. A few starting candidates are given so the pilot has somewhere to begin; they are guesses to be replaced, not results.
 
+Update 2026-11-23 (issue #19): the teammate's PC will not be used, because it does not have enough free RAM for the VMs. The pilot, the dry run, and the main runs move to four cloud VMs in one zone: a generator VM that also runs the orchestrator, a dispatcher VM, and two worker VMs. The plan, provider choice, and setup steps are in `implementation/cloud-deployment.md`. The sections below are edited to match; where an older line still says VirtualBox or the teammate's PC, that file wins.
+
 ## Problem statement
 
 The team has a fixed research design (four rules, three scenarios, three rates, five shuffled rounds, 180 main runs) and no code. The implementation plan puts the pilot in week 1 and the build in weeks 2 to 3, but the pilot can't measure capacity, spread, or quota effects without a working worker, dispatcher, and load generator. Many details the proposal left open (request format, timeouts, how an estimate is averaged, how a run is reset, how logs are joined) have to be fixed before any run, or the comparison stops being fair and repeatable.
 
-The machine used for writing code (4 cores, 7.9 GB RAM, Windows, no VirtualBox) is not the experiment host. The main runs happen on a teammate's PC with VirtualBox, the 12 logical CPU, 13.9 GB machine described in the frozen documents. Its host operating system is not confirmed yet.
+The machine used for writing code (4 cores, 7.9 GB RAM, Windows, no VirtualBox) is not the experiment host. The main runs happen on four rented cloud VMs (Google Cloud first, Azure for Students as the fallback), not on the teammate's PC named in the frozen documents.
 
 ## Solution
 
-Build the whole system first as plain Python processes that run on localhost, test it there, then deploy it to the three VMs on the teammate's PC. Use the deployed system to run the pilot and the weighted round-robin calibration, write every chosen value into one config file, freeze code and config, and run one short dry-run round of all 36 conditions. When the dry run passes, the main runs can start.
+Build the whole system first as plain Python processes that run on localhost, test it there, then deploy it to the cloud VMs. Use the deployed system to run the pilot and the weighted round-robin calibration, write every chosen value into one config file, freeze code and config, and run one short dry-run round of all 36 conditions. When the dry run passes, the main runs can start.
 
 The real order of work is: build and test locally, deploy to VMs, pilot, calibrate, freeze, dry run. The slide 4 week labels stay unchanged in the paper.
 
@@ -66,8 +68,8 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 46. As the paper writer, I want a run that misses its planned rate by more than the tolerance kept and flagged, not deleted, so that the paper can report it.
 47. As a team member, I want pilot tools for image timing, calibration, a rate sweep, a quota check, a bottleneck check, a send-accuracy check, and a spread check, so that each pilot decision comes from a recorded measurement.
 48. As a team member, I want the weighted round-robin calibration to keep each worker busy with the scenario's image mix and measure its throughput, so that the weights follow Aslanpour et al. (FGCS 2024, Section 4.2).
-49. As a team member, I want a VM setup guide and scripts, so that a teammate can rebuild the testbed from scratch on their own PC.
-50. As a team member, I want a script that records VirtualBox, Ubuntu, kernel, systemd, cgroup, Python, and package versions, so that the setup section of the paper is exact.
+49. As a team member, I want a cloud VM setup guide and scripts, so that anyone on the team can rebuild the testbed from scratch on Google Cloud or Azure.
+50. As a team member, I want a script that records the provider, machine type, zone, CPU model, Ubuntu, kernel, systemd, cgroup, Python, and package versions, so that the setup section of the paper is exact.
 51. As a team member, I want a short dry-run round of all 36 conditions before the main runs, so that every part of the pipeline is proven once with final settings.
 52. As a defense speaker, I want every rule's behaviour covered by tests built from the defense guide examples, so that what we say in the defense matches the code.
 
@@ -75,9 +77,10 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 
 ### Machines and stack
 
-- Development happens on any machine as localhost processes. The main runs happen on a teammate's PC with VirtualBox: a dispatcher VM (1 GB, 1 vCPU) and two worker VMs (2 GB, 1 vCPU each) on one host-only network with static addresses.
-- The load generator and the orchestrator run on the host operating system of that PC, not in a VM.
-- Ubuntu Server 24.04 LTS on all VMs with its Python 3.12. The host uses a Python 3.12 virtual environment so host and VMs match. Packages: FastAPI, Uvicorn, HTTPX, Pillow, psutil, pytest, pinned in one requirements file. Config is TOML, read with the standard library.
+- Development happens on any machine as localhost processes. The main runs happen on four cloud VMs in one zone, on one private network with fixed internal addresses: a generator VM, a dispatcher VM, and two worker VMs, each with 1 vCPU. Both workers use the same machine type and CPU model. RAM follows the provider's machine type (4 GB each on Google Cloud's t2d-standard-1). Provider choice and setup are in `implementation/cloud-deployment.md`.
+- The load generator and the orchestrator run on the generator VM, which plays the role of "the host" in this spec.
+- The code depends on no provider. The orchestrator reaches the VMs only through `ssh`, `scp`, and the config.
+- Ubuntu Server 24.04 LTS on all VMs with its Python 3.12. The generator VM uses the same Python 3.12 virtual environment as the others. Packages: FastAPI, Uvicorn, HTTPX, Pillow, psutil, pytest, pinned in one requirements file. Config is TOML, read with the standard library.
 - Colab and similar notebook services are not used. They can't run three VMs, systemd, or a CPU quota.
 
 ### Code layout
@@ -152,7 +155,7 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
 
 ### Monitoring
 
-- A psutil sampler on each VM and on the host writes one CSV row per second: timestamp, total CPU, CPU of the service process, RAM used.
+- A psutil sampler on each VM and on the host writes one CSV row per second: timestamp, total CPU, CPU of the service process, RAM used. On Linux it also writes CPU steal time, which shows time taken by other tenants of the cloud machine (added by #6 for #19).
 - Dispatcher process CPU time read through the admin endpoint at start and end of each run.
 - cpu.stat counters (nr_periods, nr_throttled, throttled_usec) read from each worker service's cgroup before and after every run, in every scenario. In scenarios 1 and 2 they should not change.
 
@@ -214,14 +217,15 @@ The spread check repeats one condition five times and looks at per-run p95. If t
 
 ### VM setup
 
-- A written guide plus scripts in `implementation/setup/`: VirtualBox host-only network, static addresses, Ubuntu install, SSH keys, the limited sudo rule, the Python environment, and systemd units for worker and dispatcher.
+- A written guide plus scripts in `implementation/setup/`: creating the four VMs on Google Cloud and on Azure for Students, one private network with fixed internal addresses, a firewall that allows only SSH from outside, the payment card warning, SSH keys, the limited sudo rule, the Python environment, and systemd units for worker and dispatcher. No VirtualBox steps.
 - Unattended upgrades and other scheduled jobs that could wake up during a run are disabled on the VMs.
-- A version script writes VirtualBox, Ubuntu, kernel, systemd, cgroup version, Python, and package versions to a file in `implementation/setup/`.
+- A version script writes the provider, machine type, zone or region, CPU model, vCPU count, RAM, Ubuntu, kernel, systemd, cgroup version, Python, and package versions to a file in `implementation/setup/`. It reads the provider's metadata service when one answers and writes "unknown" otherwise.
+- A pre-flight check compares the two workers' CPU model and vCPU count over SSH and refuses to start a run when they differ.
 - The reset is the orchestrator's restart step. The guide lists exactly what it resets: worker queues, dispatcher state and estimates, rule counters, and the quota.
 
 ### Build order
 
-Each slice ends with something runnable and tested. Slices 1 to 8 need only a laptop. Slices 9 to 11 need the teammate's PC.
+Each slice ends with something runnable and tested. Slices 1 to 8 need only a laptop. Slices 9 to 11 need the cloud VMs.
 
 1. Skeleton: shared package, pinned requirements, config loader with stage checks, pytest running.
 2. Image set generator and worker: process endpoint, queue, 503, budget and expiry, health, worker log.
@@ -276,12 +280,13 @@ Each slice ends with something runnable and tested. Slices 1 to 8 need only a la
 - Week 6 analysis beyond the per-run summary: per-condition medians, plots, the H1 to H3 verdicts, the overhead table.
 - The term paper and demo.
 - Everything listed under "Dropped from the earlier plan" in `implementation/implementation-plan.md`: a dynamic slowdown scenario, more than five rounds, significance tests, schedule statistics beyond the achieved-rate check, analysis of estimate age, the VirtualBox execution cap.
-- Running the system on Colab, public clouds, or containers instead of VMs.
-- Running the pilot, the freeze, and the dry run themselves. The issues build the tools; a person at the experiment PC runs them, following the manual checklist in `implementation/ORCHESTRATION.md`.
+- Running the system on Colab or in containers instead of VMs. Public cloud VMs replaced the teammate's PC on 2026-11-23 (#19).
+- Running the pilot, the freeze, and the dry run themselves. The issues build the tools; a person logged in to the generator VM runs them, following the manual checklist in `implementation/ORCHESTRATION.md`.
 
 ## Further notes
 
-- The host OS of the teammate's PC is not confirmed. On Windows, Python's asyncio timers wake in steps of about 15 ms, which is why the spin-wait switch exists. The pilot's send-accuracy check decides whether it is turned on.
+- The host for the main runs is the generator VM, which runs Linux. On Windows, Python's asyncio timers wake in steps of about 15 ms, which is why the spin-wait switch exists; it stays for development on Windows laptops. The pilot's send-accuracy check on the generator VM decides whether it is turned on.
+- Cloud VMs share physical machines with other customers, and free burstable sizes can drop to a low baseline when their CPU credits run out. The main runs use a size where a vCPU is a whole core and does not burst (t2d-standard-1 on Google Cloud). If a burstable size has to be used, each VM's credit balance is recorded around every run. See `implementation/cloud-deployment.md`.
 - Uploading image bytes means the 1 vCPU dispatcher handles every image twice (in and out). The pilot's bottleneck check has to show the dispatcher keeps up at the top rate. If it doesn't, the top rate comes down or the paper discloses it.
 - Weighted round-robin gets advance knowledge of the slowed worker through calibration, and the feedback rule has to learn it at run time. The paper states this.
 - Warm-up uses a medium image and probes use a small one, and both feed the same estimate as mixed traffic. A probe can make an idle worker look faster than it is for mixed images until real replies correct it. The paper states this too.
