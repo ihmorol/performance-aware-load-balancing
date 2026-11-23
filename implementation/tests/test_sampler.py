@@ -1,3 +1,4 @@
+import collections
 import csv
 import subprocess
 import sys
@@ -8,7 +9,7 @@ import psutil
 
 from experiments.sampler import take_sample
 
-COLUMNS = ["timestamp_unix_s", "cpu_total_percent", "cpu_process_percent", "ram_used_mb"]
+COLUMNS = ["timestamp_unix_s", "cpu_total_percent", "cpu_process_percent", "ram_used_mb", "cpu_steal_percent"]
 IMPLEMENTATION = Path(__file__).resolve().parents[1]
 
 
@@ -30,7 +31,7 @@ def busy(seconds):
         pass
 
 
-def test_one_sample_has_the_four_columns_with_plausible_values():
+def test_one_sample_has_the_five_columns_with_plausible_values():
     process = psutil.Process()  # this test's own process
     take_sample(process)  # psutil counts CPU from the previous call, so the first one only starts it
     busy(0.3)
@@ -89,3 +90,19 @@ def test_rows_reach_the_file_while_the_sampler_runs(tmp_path):
     assert header == COLUMNS
     assert len(rows) >= 3
     assert all(row[2] == "" for row in rows)
+
+
+def test_steal_time_fills_its_column_where_the_platform_reports_it(monkeypatch):
+    # Linux reports steal time: CPU time a cloud host gave to other tenants.
+    Times = collections.namedtuple("Times", "user system idle steal")
+    monkeypatch.setattr(psutil, "cpu_times_percent", lambda: Times(10.0, 5.0, 80.0, 5.0))
+
+    assert take_sample(None)["cpu_steal_percent"] == 5.0
+
+
+def test_the_steal_column_is_empty_where_the_platform_gives_no_steal_time(monkeypatch):
+    # Windows and macOS have no steal field.
+    Times = collections.namedtuple("Times", "user system idle")
+    monkeypatch.setattr(psutil, "cpu_times_percent", lambda: Times(10.0, 5.0, 85.0))
+
+    assert take_sample(None)["cpu_steal_percent"] == ""
