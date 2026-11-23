@@ -89,11 +89,12 @@ def ledger_condition(row: dict) -> Condition:
 
 
 def run_loadgen(config_path: Path, target: str, folder: Path, condition: Condition,
-                round_: int, run_id: str, run_length: float | None) -> None:
-    """Step 5: run the load generator and wait for it to finish."""
+                round_: int, run_id: str, run_length: float | None, extra: tuple[str, ...] = ()) -> None:
+    """Step 5: run the load generator and wait for it to finish. extra holds more flags, such as --dry-run."""
     command = [sys.executable, "-m", "experiments.loadgen", "--config", str(Path(config_path).resolve()),
                "--target", target, "--scenario", str(condition.scenario), "--rate", str(condition.rate),
-               "--round", str(round_), "--rule", condition.rule, "--run-id", run_id, "--out", str(folder)]
+               "--round", str(round_), "--rule", condition.rule, "--run-id", run_id, "--out", str(folder),
+               *extra]
     if run_length is not None:
         command += ["--run-length", str(run_length)]
     code = subprocess.run(command, cwd=IMPLEMENTATION).returncode
@@ -217,15 +218,25 @@ def round_conditions(config: Config) -> list[Condition]:
             for rule in RULES]
 
 
+def round_seed(config: Config, round_: int) -> str:
+    return f"{config.seeds.round_order}:{round_}"
+
+
+def round_order(config: Config, round_: int) -> list[Condition]:
+    """The 36 conditions of a round, shuffled with the round's saved seed."""
+    order = round_conditions(config)
+    random.Random(round_seed(config, round_)).shuffle(order)
+    return order
+
+
 def run_round(config: Config, results: Path, round_: int, run_one) -> bool:
     """Run every condition of a round in its shuffled order.
 
     run_one(condition, attempt) runs one condition and returns True when it
     finished.
     """
-    seed = f"{config.seeds.round_order}:{round_}"
-    order = round_conditions(config)
-    random.Random(seed).shuffle(order)
+    seed = round_seed(config, round_)
+    order = round_order(config, round_)
     folder = stage_dir(results, config.stage)
     folder.mkdir(parents=True, exist_ok=True)
     saved = {"seed": seed, "order": [dataclasses.asdict(c) for c in order]}

@@ -19,7 +19,7 @@ import httpx
 
 from experiments.backend import Backend
 from experiments.local_backend import HEALTH_TIMEOUT_S, IMPLEMENTATION, _end, is_healthy
-from plb.config import Config
+from plb.config import Config, git_commit
 
 UNITS = {"w1": "plb-worker.service", "w2": "plb-worker.service", "dispatcher": "plb-dispatcher.service"}
 # On each VM, relative to the user's home: run files (env files, logs, sampler CSVs).
@@ -170,6 +170,13 @@ class SshBackend(Backend):
             cpus[worker] = {"cpu_model": fields["Model name"].strip(), "vcpus": int(fields["CPU(s)"])}
         if cpus["w1"] != cpus["w2"]:
             raise RuntimeError(f"the workers differ, so the comparison would not be fair: {cpus}")
+        # The run records this machine's commit, so every VM must run that code.
+        commit = git_commit(IMPLEMENTATION)
+        for service in ("w1", "w2", "dispatcher"):
+            theirs = self._ssh(service, "git -C plb rev-parse HEAD").strip()
+            if theirs != commit:
+                raise RuntimeError(f"{service} runs commit {theirs[:7]}, this machine {commit[:7]}; "
+                                   "run setup/deploy.sh")
         return cpus
 
     def apply_quota(self, service, cpu_percent, period_ms):
