@@ -70,8 +70,8 @@ These run on the four cloud VMs from `implementation/cloud-deployment.md`, not o
 - [x] #3 Dispatcher with the four routing rules (wave 2), merged in #15
 - [x] #4 Open-loop load generator and response-time summary (wave 2), merged in #16
 - [x] #5 Local orchestrator, monitoring, and round runner (wave 3), merged in #17 and #18
-- [ ] #19 Move the main runs from the teammate's PC to cloud VMs (docs, before wave 4)
-- [ ] #6 VM deployment and SSH backend (wave 4)
-- [ ] #7 Pilot, calibration, and dry-run tools (wave 4)
+- [x] #19 Move the main runs from the teammate's PC to cloud VMs (docs, before wave 4), merged in #20
+- [x] #6 VM deployment and SSH backend (wave 4), merged in #22
+- [x] #7 Pilot, calibration, and dry-run tools (wave 4), merged in PR_7
 
 Progress is tracked on issue #8. This list is a copy, last updated 2026-11-23.
