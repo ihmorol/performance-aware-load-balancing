@@ -142,7 +142,6 @@ async def _consume(queue: asyncio.Queue, process: Callable[[bytes], bytes], log:
 
 
 def _reply(job: _Job, response: Response) -> None:
-    # The handler's wait is cancelled if the client goes away first.
     if not job.reply.done():
         job.reply.set_result(response)
 

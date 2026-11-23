@@ -67,6 +67,34 @@ def test_main_stage_with_uncommitted_changes_raises(tmp_path):
         load_config(path)
 
 
+def test_a_config_saved_with_a_utf8_bom_loads(tmp_path):
+    # Windows PowerShell 5.1 writes a BOM with Set-Content -Encoding utf8.
+    path = committed_repo(tmp_path, "")
+    path.write_text(full_main_config_text(), encoding="utf-8-sig")
+    git(tmp_path, "commit", "-q", "-am", "bom")
+
+    assert load_config(path).stage == "main"
+
+
+def test_main_stage_refuses_untracked_code_but_allows_untracked_run_outputs(tmp_path):
+    # The real layout: the config sits in a folder of its own, next to the code.
+    git(tmp_path, "init", "-q")
+    (tmp_path / "config").mkdir()
+    path = tmp_path / "config" / "main.toml"
+    path.write_text(full_main_config_text(), encoding="utf-8")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "init")
+    (tmp_path / "results").mkdir()
+    (tmp_path / "results" / "ledger.csv").write_text("a,b\n", encoding="utf-8")
+
+    load_config(path)  # run outputs don't count
+
+    (tmp_path / "experiments").mkdir()
+    (tmp_path / "experiments" / "pilot.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="experiments/pilot.py"):
+        load_config(path)
+
+
 def test_config_hash_changes_when_one_byte_changes(tmp_path):
     path = tmp_path / "a.toml"
     data = bytearray(DEV_CONFIG.read_bytes())

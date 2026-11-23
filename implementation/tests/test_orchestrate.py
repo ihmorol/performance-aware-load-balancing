@@ -13,7 +13,7 @@ from experiments.backends import BACKENDS
 from experiments.local_backend import LocalBackend, is_healthy
 from experiments.orchestrate import Condition, run_condition, run_round
 from experiments.orchestrate import main as orchestrate_main
-from plb.config import load_config
+from plb.config import RatesConfig, load_config
 from plb.rows import DISPATCHER_LOG_COLUMNS, GENERATOR_LOG_COLUMNS, WORKER_LOG_COLUMNS
 
 IMPLEMENTATION = Path(__file__).resolve().parents[1]
@@ -169,6 +169,45 @@ def test_a_run_whose_worker_fails_to_start_is_rerun_at_the_end_and_both_attempts
     assert "w1 did not start" in rows[1]["reason"]
 
 
+def test_a_finished_round_started_again_runs_nothing_even_for_a_rate_with_many_digits(tmp_path):
+    # Pilot rates are fractions of a measured capacity, so they can have many digits.
+    config = dataclasses.replace(load_config(DEV_CONFIG),
+                                 rates=RatesConfig(scenario1=(1.0, 6.2438195, 3.0),
+                                                   scenario2=(1.0, 2.0, 3.0), scenario3=(1.0, 2.0, 3.0)))
+    first, second = [], []
+
+    assert run_round(config, tmp_path, 1, fake_steps(config, tmp_path, first))
+    assert run_round(config, tmp_path, 1, fake_steps(config, tmp_path, second))
+
+    assert len(first) == 36
+    assert second == []
+
+
+def test_a_run_tried_before_a_restart_is_tried_again_at_the_end_of_the_round(tmp_path):
+    config = load_config(DEV_CONFIG)
+    order = []
+    run_round(config, tmp_path / "order", 1, recording_run(order))
+    broken = order[0][0]  # the first run of the round fails to start
+    loads = []
+
+    def load_until_ctrl_c(*args):
+        # Ctrl+C arrives while the third run is sending its load.
+        if len(loads) == 1:
+            raise KeyboardInterrupt
+        loads.append(args)
+        fake_load(*args)
+
+    first, second = [], []
+    with pytest.raises(KeyboardInterrupt):
+        run_round(config, tmp_path, 1, fake_steps(config, tmp_path, first, load=load_until_ctrl_c,
+                                                  fail_start={(broken, 1): "w1"}))
+    assert run_round(config, tmp_path, 1, fake_steps(config, tmp_path, second))
+
+    interrupted = first[2][0]
+    assert [condition for condition, _ in second[-2:]] == [broken, interrupted]
+    assert [condition for condition, _ in second].count(broken) == 1
+
+
 def full_main_config_text():
     """dev.toml with stage main and the keys that dev.toml leaves unset, as in test_config.py."""
     text = DEV_CONFIG.read_text(encoding="utf-8")
@@ -240,7 +279,7 @@ def test_throw_out_only_appends_a_thrown_out_row(tmp_path):
     rows = read_ledger(tmp_path)
     assert [row["status"] for row in rows] == ["started", "finished", "thrown_out"]
     assert {k: rows[2][k] for k in ("stage", "round", "scenario", "rule", "rate", "attempt", "run_id", "reason")} == {
-        "stage": "pilot", "round": "1", "scenario": "1", "rule": "rr", "rate": "1", "attempt": "1",
+        "stage": "pilot", "round": "1", "scenario": "1", "rule": "rr", "rate": "1.0", "attempt": "1",
         "run_id": "r1-s1-rr-1-a1", "reason": "host was busy"}
 
 

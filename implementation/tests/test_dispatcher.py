@@ -266,6 +266,24 @@ async def test_a_failed_warm_up_request_keeps_health_at_503(tmp_path):
 
     assert [r["outcome"] for r in rows] == ["success", "success", "error", "error"]
     assert health.status_code == 503
+    assert health.json()["status"] == "warm-up failed"
+
+
+async def test_a_warm_up_request_that_raises_fails_warm_up_and_the_shutdown_log_is_kept(tmp_path):
+    # The fake transport raises KeyError for a host it doesn't know: an exception
+    # that is not an httpx.HTTPError, like httpx.InvalidURL from a bad address.
+    config = dataclasses.replace(make_config(warmup_count=1),
+                                 addresses=AddressesConfig(workers=("http://w1", "http://w3")))
+    path = tmp_path / "shutdown.csv"
+    async with started(FakeWorker(), FakeWorker(), config=config, shutdown_log_path=path) as client:
+        for _ in range(100):
+            health = await client.get("/health")
+            if health.json()["status"] != "warming up":
+                break
+            await asyncio.sleep(0.02)
+
+    assert health.json()["status"] == "warm-up failed"
+    assert [(r["chosen_worker"], r["outcome"]) for r in read_rows(path)] == [("w1", "success"), ("w2", "error")]
 
 
 async def test_weighted_round_robin_rule_uses_the_scenario_weights_from_config():
@@ -350,6 +368,20 @@ async def test_feedback_rule_sends_no_probe_before_the_first_client_request():
     assert probes_before == []
 
 
+async def test_feedback_rule_counts_t_from_the_first_client_request_not_from_warm_up():
+    w1, w2 = FakeWorker(), FakeWorker()
+    config = make_config(warmup_count=1, probe_threshold_s=0.4)
+    async with started(w1, w2, rule="feedback", config=config) as client:
+        await wait_for_health(client)
+        await asyncio.sleep(1.2)  # a long wait between warm-up and the load
+        await post(client, "r1")  # goes to w1; w2 stays idle
+        await asyncio.sleep(0.15)  # well under T after the first client request
+        probes_soon_after = probe_calls(w1) + probe_calls(w2)
+        await wait_until(lambda: probe_calls(w2))
+
+    assert probes_soon_after == []
+
+
 @pytest.mark.parametrize("rule", ["rr", "wrr", "lur"])
 async def test_no_probe_is_sent_under_the_other_rules(rule):
     w1, w2 = FakeWorker(), FakeWorker()
@@ -365,7 +397,10 @@ async def test_no_probe_is_sent_under_the_other_rules(rule):
 async def test_admin_cpu_returns_the_process_cpu_time_in_seconds():
     async with started(FakeWorker(), FakeWorker()) as client:
         first = (await client.get("/admin/cpu")).json()["cpu_s"]
-        sum(range(3_000_000))  # spend some CPU
+        start = time.process_time()
+        # Spend CPU well past Windows' process clock steps of about 15.6 ms.
+        while time.process_time() - start < 0.1:
+            pass
         second = (await client.get("/admin/cpu")).json()["cpu_s"]
 
     assert 0 < first < second
