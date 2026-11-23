@@ -9,9 +9,9 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 - `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), the seeded image set generator (`plb.images`), and the per-run summary (`plb.summary`).
 - `worker/`: the image processing service. Built.
 - `dispatcher/`: routing rules and the forwarding path. Built.
-- `experiments/`: the load generator, the sampler, and the orchestrator with its local backend are built. The SSH backend and the pilot tools are not built yet. The per-run summary lives in `plb.summary`.
-- `setup/`: VM setup guide, systemd units, and scripts. Not built yet.
-- `config/dev.toml`: development values for localhost. They are not pilot results.
+- `experiments/`: the load generator, the sampler, the version record, and the orchestrator with its local and SSH backends are built. The pilot tools are not built yet. The per-run summary lives in `plb.summary`.
+- `setup/`: the cloud VM setup guide, systemd units, the sudo rule, and the provision and deploy scripts. Not yet run on real VMs.
+- `config/dev.toml`: development values for localhost. `config/cloud.toml` has the same values with the four cloud VMs' addresses and the `[ssh]` section. Neither holds pilot results.
 - `tests/`: the test suite.
 
 ## Setting up
@@ -119,7 +119,7 @@ The resource sampler writes one CSV row per interval:
 python -m experiments.sampler --out local/sampler-host.csv --interval 1 --pid <service pid>
 ```
 
-The columns are `timestamp_unix_s, cpu_total_percent, cpu_process_percent, ram_used_mb`. `cpu_process_percent` is the `--pid` process's CPU as a percent of one CPU, as psutil gives it, and stays empty without `--pid`. Every row is flushed at once, so a killed sampler keeps the rows it wrote. It runs until it is killed, or stops by itself when the `--pid` process ends.
+The columns are `timestamp_unix_s, cpu_total_percent, cpu_process_percent, ram_used_mb, cpu_steal_percent`. `cpu_steal_percent` is time a cloud host gave to other tenants; Linux reports it, and it stays empty elsewhere. `cpu_process_percent` is the `--pid` process's CPU as a percent of one CPU, as psutil gives it, and stays empty without `--pid`. Every row is flushed at once, so a killed sampler keeps the rows it wrote. It runs until it is killed, or stops by itself when the `--pid` process ends.
 
 ## Orchestrator
 
@@ -136,15 +136,17 @@ python -m experiments.orchestrate throw-out --run-id r1-s2-feedback-2-a1 \
 
 The local backend starts every service as a process on this machine with the ports from `config.addresses`. It has no cgroups, so the quota and cpu.stat operations return `unsupported`, and metadata.json records them that way. Ctrl+C is safe, but on Windows a hard kill of the orchestrator leaves the services running, so stop them by the PIDs that `netstat -ano` shows before the next run; until then, starting a service on a taken port fails the run with a message that names the port. The backends are listed in `experiments/backends.py`.
 
+The SSH backend (`--backend ssh`) runs the services on the cloud VMs and reaches them only with `ssh`, `scp`, and the config, so it works on any provider. It restarts the systemd units with the run's arguments, sets and reads the quota through `systemctl set-property --runtime` and `cpu.max`, reads `cpu.stat`, runs the service samplers on their VMs, and copies every log back into the run folder. Before each run it compares the two workers' CPU model and vCPU count and fails the run when they differ. Setup is in [setup/README.md](setup/README.md).
+
 One run follows the steps of "Orchestrator" in [spec.md](spec.md):
 
-1. Write a `started` row to the ledger.
+1. Write a `started` row to the ledger, then check that both workers have the same CPU model and vCPU count (SSH backend only).
 2. In scenario 3, apply the quota from `[quota]` to w2 and read it back. In scenarios 1 and 2, clear it.
 3. Restart w1 and w2 and wait for their health checks, then restart the dispatcher with the run's rule, scenario, rate, and run id and wait for its health check, which passes only after warm-up. A failed warm-up fails the run at once.
 4. Read cpu.stat on both workers and the dispatcher CPU time, then start the samplers for the host, the dispatcher, and both workers.
 5. Run `python -m experiments.loadgen` against the dispatcher. A non-zero exit fails the run.
 6. Read cpu.stat and the dispatcher CPU time again, stop the samplers, and have the dispatcher and both workers write their logs into the run folder.
-7. Write metadata.json (commit, config hash, seeds, quota, cpu.stat, dispatcher CPU time at start and end, time of each step) and summary.json.
+7. Write metadata.json (commit, config hash, seeds, the workers' CPU details, quota, cpu.stat, dispatcher CPU time at start and end, time of each step) and summary.json.
 8. Write a `finished` row. Any error in steps 2 to 7 writes `failed` with the error text instead. The backend stops every service and sampler in either case.
 
 The ledger is `<results>/ledger.csv`. Rows are only ever appended. Its columns are `timestamp_unix_s, stage, round, scenario, rule, rate, attempt, run_id, status, reason`, and status is `started`, `finished`, `failed`, or `thrown_out`. The run id is `r<round>-s<scenario>-<rule>-<rate>-a<attempt>`, such as `r1-s2-feedback-2-a1`. Each attempt gets its own run id, also one cut off by Ctrl+C.
