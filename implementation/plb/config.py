@@ -163,7 +163,9 @@ def load_config(path: str | Path) -> Config:
     """Read a config file and check it against the schema and its stage."""
     path = Path(path)
     try:
-        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig also reads a file that starts with a BOM, which Windows
+        # PowerShell 5.1 writes with Set-Content -Encoding utf8.
+        raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{path}: {exc}") from exc
 
@@ -199,11 +201,16 @@ def _require_clean_git(config_path: Path) -> None:
         _git(directory, "ls-files", "--error-unmatch", config_path.name)
     except ConfigError as exc:
         raise ConfigError(f"main stage config {config_path} is not committed to git") from exc
-    # Other untracked files are ignored: run outputs land in the tree during
-    # a round, and code only takes effect once tracked code imports it.
     status = _git(directory, "status", "--porcelain", "--untracked-files=no")
     if status.strip():
         raise ConfigError(f"main stage needs a clean git working tree; uncommitted changes:\n{status}")
+    # Tracked code can import an untracked module, and then the recorded commit
+    # can't rebuild the run. Other untracked files, such as run outputs in
+    # results/ or a version record on a VM, are allowed.
+    untracked = _git(directory, "ls-files", "--others", "--exclude-standard", "--full-name",
+                     "--", ":(top)*.py", ":(top)*.toml")
+    if untracked.strip():
+        raise ConfigError(f"main stage needs every .py and .toml file committed; untracked:\n{untracked}")
 
 
 def _git(directory: str | Path, *args: str) -> str:
