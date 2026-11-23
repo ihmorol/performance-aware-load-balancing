@@ -6,9 +6,10 @@ from pathlib import Path
 
 from experiments.backend import Backend
 from experiments.local_backend import LocalBackend
+from experiments.ssh_backend import SshBackend
 from plb.config import Config
 
-BACKENDS = {"local": LocalBackend}
+BACKENDS = {"local": LocalBackend, "ssh": SshBackend}
 
 
 def make_backend(name: str, config: Config, config_path: Path) -> Backend:

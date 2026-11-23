@@ -128,6 +128,7 @@ def run_condition(config: Config, config_path: Path, results: Path, round_: int,
     try:
         # Raw files are never overwritten, so an existing folder fails the run.
         folder.mkdir(parents=True)
+        workers = backend.check_workers()
 
         if condition.scenario == 3:
             backend.apply_quota("w2", config.quota.cpu_percent, config.quota.period_ms)
@@ -191,6 +192,7 @@ def run_condition(config: Config, config_path: Path, results: Path, round_: int,
             "config_hash": config_hash(config_path),
             "seeds": dataclasses.asdict(config.seeds),
             "run_length_s": run_length if run_length is not None else config.run.length_s,
+            "workers": workers,
             "quota": quota,
             "cpu_stat": cpu_stat,
             "dispatcher_cpu_s": {"start": dispatcher_cpu_start, "end": dispatcher_cpu_end},

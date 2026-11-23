@@ -31,6 +31,14 @@ class Backend:
         """Return once the service's /health answers 200, or raise."""
         raise NotImplementedError
 
+    def check_workers(self):
+        """Pre-flight: raise if the two workers' CPU model or vCPU count differ.
+
+        Returns both workers' CPU details for the run metadata, or "unsupported"
+        where every service shares one machine.
+        """
+        return UNSUPPORTED
+
     def apply_quota(self, service: str, cpu_percent: float, period_ms: int):
         """Put a CPU quota on a worker's service."""
         raise NotImplementedError
