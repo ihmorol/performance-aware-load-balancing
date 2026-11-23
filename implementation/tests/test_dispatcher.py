@@ -397,7 +397,10 @@ async def test_no_probe_is_sent_under_the_other_rules(rule):
 async def test_admin_cpu_returns_the_process_cpu_time_in_seconds():
     async with started(FakeWorker(), FakeWorker()) as client:
         first = (await client.get("/admin/cpu")).json()["cpu_s"]
-        sum(range(3_000_000))  # spend some CPU
+        start = time.process_time()
+        # Spend CPU well past Windows' process clock steps of about 15.6 ms.
+        while time.process_time() - start < 0.1:
+            pass
         second = (await client.get("/admin/cpu")).json()["cpu_s"]
 
     assert 0 < first < second
