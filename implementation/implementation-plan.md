@@ -24,6 +24,8 @@ All recorded in `notes/decisions.md`.
 
 ### Testbed
 
+Update 2026-11-23: steps 1 and 2 now happen on four cloud VMs, not in VirtualBox. Follow `implementation/cloud-deployment.md` (issue #19). Steps 3 and 4 still apply, with "host" meaning the generator VM.
+
 1. Create the three VMs in VirtualBox (dispatcher 1 GB, 1 vCPU; workers 2 GB, 1 vCPU each) on one host-only network.
 2. Write `implementation/setup/README.md` with VirtualBox, Ubuntu, kernel, cgroup, and Python versions. Pin packages in `requirements.txt`.
 3. Reset by restarting the worker and dispatcher services, and apply or clear the quota for the scenario. List in the README exactly what this resets.
