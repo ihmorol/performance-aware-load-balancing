@@ -35,6 +35,8 @@ scenario3 = [1.0, 2.0, 3.0]
 
 # max_sum is a team choice for calibration, left unset here.
 [weights]
+# Largest sum of the two calibrated weights.
+max_sum = 10
 scenario1 = [1, 1]
 scenario2 = [1, 1]
 scenario3 = [1, 1]

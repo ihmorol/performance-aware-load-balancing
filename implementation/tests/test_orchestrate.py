@@ -213,7 +213,6 @@ def full_main_config_text():
     text = DEV_CONFIG.read_text(encoding="utf-8")
     text = text.replace('stage = "pilot"', 'stage = "main"')
     text = text.replace("[quota]\n", "[quota]\ncpu_percent = 50.0\nperiod_ms = 100\n")
-    text = text.replace("[weights]\n", "[weights]\nmax_sum = 10\n")
     return text.replace("[ssh]\n", '[ssh]\nuser = "plb"\nkey_path = "~/.ssh/plb"\n')
 
 

@@ -134,6 +134,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", required=True, help="run folder")
     parser.add_argument("--run-length", type=float,
                         help="run length in seconds instead of run.length_s; refused in the main stage")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="a run of the dry run, which may use --run-length in the main stage")
     args = parser.parse_args(argv)
     if args.rate <= 0:
         parser.error("--rate must be greater than 0")
@@ -163,7 +165,7 @@ def main(argv: list[str] | None = None) -> None:
 
     length_s, dropped_s = config.run.length_s, config.run.dropped_window_s
     if args.run_length is not None:
-        if config.stage == "main":
+        if config.stage == "main" and not args.dry_run:
             parser.error("--run-length is refused in the main stage, which uses run.length_s")
         # W keeps the same share of the shorter run.
         dropped_s = dropped_s * args.run_length / length_s

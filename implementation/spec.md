@@ -220,7 +220,7 @@ The spread check repeats one condition five times and looks at per-run p95. If t
 - A written guide plus scripts in `implementation/setup/`: creating the four VMs on Google Cloud and on Azure for Students, one private network with fixed internal addresses, a firewall that allows only SSH from outside, the payment card warning, SSH keys, the limited sudo rule, the Python environment, and systemd units for worker and dispatcher. No VirtualBox steps.
 - Unattended upgrades and other scheduled jobs that could wake up during a run are disabled on the VMs.
 - A version script writes the provider, machine type, zone or region, CPU model, vCPU count, RAM, Ubuntu, kernel, systemd, cgroup version, Python, and package versions to a file in `implementation/setup/`. It reads the provider's metadata service when one answers and writes "unknown" otherwise.
-- A pre-flight check compares the two workers' CPU model and vCPU count over SSH and refuses to start a run when they differ.
+- A pre-flight check compares the two workers' CPU model and vCPU count over SSH and refuses to start a run when they differ. It also refuses a run when any VM's clone is at another commit than the generator VM's.
 - The reset is the orchestrator's restart step. The guide lists exactly what it resets: worker queues, dispatcher state and estimates, rule counters, and the quota.
 
 ### Build order

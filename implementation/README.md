@@ -9,7 +9,7 @@ The build follows [spec.md](spec.md) and the order in [ORCHESTRATION.md](ORCHEST
 - `plb/`: the shared package. Config loading and checks (`plb.config`), the header names and outcome values every part uses (`plb.protocol`), the column names of the worker, dispatcher, and generator logs (`plb.rows`), the seeded image set generator (`plb.images`), and the per-run summary (`plb.summary`).
 - `worker/`: the image processing service. Built.
 - `dispatcher/`: routing rules and the forwarding path. Built.
-- `experiments/`: the load generator, the sampler, the version record, and the orchestrator with its local and SSH backends are built. The pilot tools are not built yet. The per-run summary lives in `plb.summary`.
+- `experiments/`: the load generator, the sampler, the version record, and the orchestrator with its local and SSH backends, and the pilot tools are built. The per-run summary lives in `plb.summary`.
 - `setup/`: the cloud VM setup guide, systemd units, the sudo rule, and the provision and deploy scripts. Not yet run on real VMs.
 - `config/dev.toml`: development values for localhost. `config/cloud.toml` has the same values with the four cloud VMs' addresses and the `[ssh]` section. Neither holds pilot results.
 - `tests/`: the test suite.
@@ -161,6 +161,31 @@ Run folders:
 The scenario folders are `scenario-1-uniform`, `scenario-2-mixed`, and `scenario-3-degraded-worker`, as in [results/README.md](../results/README.md). Each run folder holds `schedule.csv`, `generator.csv`, `loadgen.json`, `dispatcher.csv`, `worker-w1.csv`, `worker-w2.csv`, `sampler-host.csv`, `sampler-dispatcher.csv`, `sampler-w1.csv`, `sampler-w2.csv`, `metadata.json`, and `summary.json`.
 
 `throw-out` appends a `thrown_out` row with the reason for a run already in the ledger. It changes nothing else.
+
+## Pilot tools
+
+One command per pilot step, on either backend:
+
+```bash
+python -m experiments.pilot images --backend ssh --config config/cloud.toml --repeats 5
+python -m experiments.pilot calibrate --backend ssh --config config/cloud.toml --duration 60
+python -m experiments.pilot sweep --backend ssh --config config/cloud.toml --scenario 2 --rates 2 4 6 8
+python -m experiments.pilot quota-check --backend ssh --config config/cloud.toml
+python -m experiments.pilot bottleneck --backend ssh --config config/cloud.toml --rate 8
+python -m experiments.pilot send-accuracy --backend ssh --config config/cloud.toml --rate 8
+python -m experiments.pilot spread --backend ssh --config config/cloud.toml --run-length 60
+python -m experiments.pilot dry-run --backend ssh --config config/cloud.toml --run-length 10
+```
+
+The rates above are examples, not chosen values. Each step writes its data to a new folder under `<results>/pilot` and prints a Markdown block of values with its method. Copy the values you keep into `notes/decisions.md` and the config; no step edits either. `--results` defaults to `../results`; on a laptop pass `--results local/results`. The output names the generator host, which is `plb-gen` on the cloud VMs.
+
+- `images` times each image alone on w1 and proposes three classes, split at the two largest gaps between the sorted median times.
+- `calibrate` keeps two requests in flight at each worker for `--duration` seconds per scenario, with the quota on w2 in scenario 3. Weights are the smallest integer ratio within 0.02 of each worker's share of the throughput, with a sum of at most `weights.max_sum`. Capacity is the sum of both throughputs.
+- `sweep`, `bottleneck`, `send-accuracy`, `spread`, and `quota-check` use the orchestrator's normal run steps. `send-accuracy` runs once with `spin_wait` off and once on, from config copies that only the load generator reads. `spread` runs one condition in rounds 1 to 5, so each run has its round's schedule.
+- `quota-check` stops with an "unsupported" message on the local backend, which has no cgroups.
+- `dry-run` runs all 36 conditions once in a new folder under `<results>/dry-run`, with a ledger of its own, so it never mixes with the main runs. It prints PASS only when every run finished with no failed attempt, every generator row joins a dispatcher row, every summary computed, and the ledger is complete. Otherwise it prints FAIL and one line per run and check. In the main stage it passes `--dry-run` to the load generator, which then accepts `--run-length`.
+
+On the SSH backend every run also checks that the two workers have the same CPU model and vCPU count and that all three VMs run this machine's commit.
 
 ## Before running experiments
 

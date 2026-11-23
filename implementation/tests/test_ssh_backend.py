@@ -8,7 +8,7 @@ import pytest
 from experiments.backends import BACKENDS
 from experiments.orchestrate import Condition, run_condition
 from experiments.ssh_backend import SshBackend, parse_cpu_max, parse_cpu_stat
-from plb.config import AddressesConfig, Config, MonitoringConfig, QuotaConfig, SshConfig
+from plb.config import AddressesConfig, Config, MonitoringConfig, QuotaConfig, SshConfig, git_commit
 
 KEY = str(Path("~/.ssh/plb").expanduser())
 W2 = ["ssh", "-i", KEY, "-o", "BatchMode=yes", "plb@10.128.0.22"]
@@ -168,17 +168,28 @@ def lscpu(model, cpus=1):
     return f"Architecture:            x86_64\nCPU(s):                  {cpus}\nModel name:              {model}\n"
 
 
-SAME_CPUS = {"10.128.0.21 lscpu": lscpu("AMD EPYC 7B13"), "10.128.0.22 lscpu": lscpu("AMD EPYC 7B13")}
+COMMIT = git_commit(IMPLEMENTATION)
+SAME_CPUS = {"10.128.0.21 lscpu": lscpu("AMD EPYC 7B13"), "10.128.0.22 lscpu": lscpu("AMD EPYC 7B13"),
+             "rev-parse HEAD": COMMIT + "\n"}
 
 
-def test_the_pre_flight_check_passes_when_both_workers_have_the_same_cpu():
+def test_the_pre_flight_check_passes_when_both_workers_have_the_same_cpu_and_every_vm_this_commit():
     backend, runner, _ = http_backend(SAME_CPUS)
 
     workers = backend.check_workers()
 
     assert workers == {"w1": {"cpu_model": "AMD EPYC 7B13", "vcpus": 1},
                        "w2": {"cpu_model": "AMD EPYC 7B13", "vcpus": 1}}
-    assert runner.calls == [W1 + ["lscpu"], W2 + ["lscpu"]]
+    assert runner.calls == [W1 + ["lscpu"], W2 + ["lscpu"], W1 + ["git -C plb rev-parse HEAD"],
+                            W2 + ["git -C plb rev-parse HEAD"], DISP + ["git -C plb rev-parse HEAD"]]
+
+
+def test_the_pre_flight_check_fails_when_a_vm_runs_another_commit():
+    # The fake answers with the first key it finds, so the dispatcher's reply comes first.
+    backend, _, _ = http_backend({"10.128.0.20 git": "0" * 40 + "\n", **SAME_CPUS})
+
+    with pytest.raises(RuntimeError, match="dispatcher runs commit 0000000"):
+        backend.check_workers()
 
 
 @pytest.mark.parametrize("w2_lscpu", [lscpu("Intel Xeon Platinum 8273CL"), lscpu("AMD EPYC 7B13", cpus=2)])
