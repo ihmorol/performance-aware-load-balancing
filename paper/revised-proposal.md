@@ -1,6 +1,6 @@
 # Performance-aware load balancing: revised proposal
 
-Revised 2026-11-19. This revision keeps the frozen proposal in `final/` as the base: same question family, same four rules, same three-VM testbed, same three scenarios, same metrics. It changes wording that promised too much, fills in details the proposal left open, and states the novelty claim more carefully, using the literature in `paper/literature/gap-analysis.md`. Nothing here is a result. The build follows `implementation/spec.md`; as of 2026-11-21 only the worker and shared package are built, and no experiment has run.
+Revised 2026-11-19. This revision keeps the frozen proposal in `final/` as the base: same question family, same four rules, same three-VM testbed, same three scenarios, same metrics. It changes wording that promised too much, fills in details the proposal left open, and states the novelty claim more carefully, using the literature in `paper/literature/gap-analysis.md`. Nothing here is a result. The build follows `implementation/spec.md`; as of 2026-11-24 the code for every build issue (#2 to #7) is merged, and no experiment has run on the cloud VMs.
 
 The frozen deck and guides are not edited. Where this document and `final/` differ, this document is the current plan, and the reason is listed in the last section.
 

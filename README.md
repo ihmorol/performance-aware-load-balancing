@@ -8,7 +8,7 @@ Our contribution is a fair, repeatable comparison. Not a new algorithm, and no c
 
 ## Status
 
-The proposal stage is done. Its artifacts are frozen in `final/`. The current plan is `paper/revised-proposal.md` (2026-11-19), which keeps the frozen theme and fixes wording and open details. The build follows `implementation/spec.md` in the issue order of `implementation/ORCHESTRATION.md`. As of 2026-11-23, the shared package and worker (#2), the dispatcher (#3), the load generator (#4), and the local orchestrator (#5) are merged. The VM setup (#6) and pilot tools (#7) are not built yet. On 2026-11-23 the main runs moved from the teammate's PC, which lacks free RAM for the VMs, to four cloud VMs (#19, `implementation/cloud-deployment.md`). Google Cloud is the first choice; it needs a payment card, so Azure for Students is the fallback. No experiment has run and `results/` holds no measurements. After the build: the pilot, the three scenarios, and the term paper (10 to 15 pages, at least 8 references, per the course guidelines).
+The proposal stage is done. Its artifacts are frozen in `final/`. The current plan is `paper/revised-proposal.md` (2026-11-19), which keeps the frozen theme and fixes wording and open details. The build follows `implementation/spec.md` in the issue order of `implementation/ORCHESTRATION.md`. As of 2026-11-24, the code for every build issue (#2 to #7) is merged: the worker, the dispatcher, the load generator, the orchestrator with its local and SSH backends, the cloud setup guide, and the pilot tools. None of it has run on the cloud VMs yet. On 2026-11-23 the main runs moved from the teammate's PC, which lacks free RAM for the VMs, to four cloud VMs (#19, `implementation/cloud-deployment.md`). Google Cloud is the first choice; it needs a payment card, so Azure for Students is the fallback. No experiment has run and `results/` holds no measurements. After the build: the pilot, the three scenarios, and the term paper (10 to 15 pages, at least 8 references, per the course guidelines).
 
 ## Team and proposal slides
 
@@ -38,7 +38,7 @@ New to the project? Start with [notes/team-guide.md](notes/team-guide.md), which
 |---|---|
 | `final/` | Frozen deliverables, do not edit |
 | `paper/` | Term paper workspace |
-| `implementation/` | Dispatcher, workers, experiments, and the cloud deployment plan (cloud setup and pilot tools still to be built) |
+| `implementation/` | Dispatcher, workers, experiments, and the cloud deployment plan (cloud setup and pilot tools built, not yet run on cloud VMs) |
 | `results/` | Measurements, one folder per scenario |
 | `notes/` | Decisions and open questions |
 | `skills/` | The writing rules used across this repo |

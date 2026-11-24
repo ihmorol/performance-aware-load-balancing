@@ -10,4 +10,4 @@ Each folder holds the raw output (CSV or logs, exactly as produced) and a short 
 
 Per `implementation/spec.md`, main runs go one folder per run inside these scenario folders. Pilot, calibration, and dry-run data get their own folders next to them, and the run ledger is one CSV in this folder.
 
-No measurements exist yet. Only the worker is built; the dispatcher, load generator, and orchestrator are not.
+No measurements exist yet. The code for the pilot and the main runs is built (issues #2 to #7); the pilot on the cloud VMs comes next. Laptop runs go to `implementation/local/results`, never here.

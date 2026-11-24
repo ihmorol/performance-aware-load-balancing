@@ -168,6 +168,8 @@ One command per pilot step, on either backend:
 
 ```bash
 python -m experiments.pilot images --backend ssh --config config/cloud.toml --repeats 5
+python -m experiments.pilot images --backend ssh --config config/cloud.toml --worker w2 --quota
+python -m experiments.pilot estimates --backend ssh --config config/cloud.toml --run-length 120
 python -m experiments.pilot calibrate --backend ssh --config config/cloud.toml --duration 60
 python -m experiments.pilot sweep --backend ssh --config config/cloud.toml --scenario 2 --rates 2 4 6 8
 python -m experiments.pilot quota-check --backend ssh --config config/cloud.toml
@@ -179,11 +181,12 @@ python -m experiments.pilot dry-run --backend ssh --config config/cloud.toml --r
 
 The rates above are examples, not chosen values. Each step writes its data to a new folder under `<results>/pilot` and prints a Markdown block of values with its method. Copy the values you keep into `notes/decisions.md` and the config; no step edits either. `--results` defaults to `../results`; on a laptop pass `--results local/results`. The output names the generator host, which is `plb-gen` on the cloud VMs.
 
-- `images` times each image alone on w1 and proposes three classes, split at the two largest gaps between the sorted median times.
+- `images` times each image alone on one worker (`--worker`, w1 by default) and proposes three classes, split at the two largest gaps between the sorted median times. It also gives the median and p95 per size class. With `--worker w2 --quota` it times them on w2 under the scenario 3 quota, which is what D and T need, and prints D = (C + 1) x large class p95 when `worker.queue_capacity` is set.
+- `estimates` makes one run under least unfinished requests, whose routing doesn't read the estimate. It replays each worker's processing times through the dispatcher's EWMA update for each `--candidates` weight and reports the p95 and largest jump, then shows the estimate after warm-up and a table of mean queue lengths and estimates per time bucket. The EWMA weight, K, and W are chosen from it.
 - `calibrate` keeps two requests in flight at each worker for `--duration` seconds per scenario, with the quota on w2 in scenario 3. Weights are the smallest integer ratio within 0.02 of each worker's share of the throughput, with a sum of at most `weights.max_sum`. Capacity is the sum of both throughputs.
-- `sweep`, `bottleneck`, `send-accuracy`, `spread`, and `quota-check` use the orchestrator's normal run steps. `send-accuracy` runs once with `spin_wait` off and once on, from config copies that only the load generator reads. `spread` runs one condition in rounds 1 to 5, so each run has its round's schedule.
+- `sweep`, `bottleneck`, `send-accuracy`, `spread`, and `quota-check` use the orchestrator's normal run steps. `send-accuracy` runs once with `spin_wait` off and once on, from config copies that only the load generator reads, and reports send lag and p95 response time for each. `spread` runs one condition in rounds 1 to 5, so each run has its round's schedule.
 - `quota-check` stops with an "unsupported" message on the local backend, which has no cgroups.
-- `dry-run` runs all 36 conditions once in a new folder under `<results>/dry-run`, with a ledger of its own, so it never mixes with the main runs. It prints PASS only when every run finished with no failed attempt, every generator row joins a dispatcher row, every summary computed, and the ledger is complete. Otherwise it prints FAIL and one line per run and check. In the main stage it passes `--dry-run` to the load generator, which then accepts `--run-length`.
+- `dry-run` runs all 36 conditions once in a new folder under `<results>/dry-run`, with a ledger of its own, so it never mixes with the main runs. It prints PASS only when every run finished with no failed attempt, every generator row joins a dispatcher row, every summary computed, the throttling counters stayed put in scenarios 1 and 2, and the ledger is complete. Otherwise it prints FAIL and one line per run and check. In the main stage it passes `--dry-run` to the load generator, which then accepts `--run-length`.
 
 On the SSH backend every run also checks that the two workers have the same CPU model and vCPU count and that all three VMs run this machine's commit.
 

@@ -76,11 +76,11 @@ Expected, written before any run: H1, with equal workers, feedback and least unf
 | #3 | Dispatcher with the four rules | Done |
 | #4 | Load generator and per-run summary | Done |
 | #5 | Orchestrator, monitoring, run ledger | Done |
-| #19 | Move the main runs to cloud VMs (docs) | Open, before #6 and #7 |
-| #6 | Cloud VM setup guide and scripts | To build |
-| #7 | Pilot tools and dry run | To build |
+| #19 | Move the main runs to cloud VMs (docs) | Done |
+| #6 | Cloud VM setup guide and scripts | Done, not yet run on cloud VMs |
+| #7 | Pilot tools and dry run | Done, not yet run on cloud VMs |
 
-An agent can build #6 and #7 in parallel once #19 is closed, and later the analysis scripts and plots.
+Next for an agent: the week 6 analysis scripts and plots. Next for us: the cloud account, the pilot, and the main runs.
 
 Only we can: check that a card works for Google Cloud (or use Azure for Students), sign up, and create the cloud VMs with the guide from #6, run the pilot and record the values, run the 180 runs in one stretch and stop the VMs between sessions, read the papers we cite, write and own the term paper (10 to 15 pages, at least 8 references), take screenshots for the demo, and explain every part in the defense. Check what the course allows for AI help in writing.
 
