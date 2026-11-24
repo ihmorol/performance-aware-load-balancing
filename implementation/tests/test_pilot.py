@@ -58,6 +58,7 @@ def complete_dry_run(root, config):
         write_csv(folder / "dispatcher.csv", DISPATCHER_LOG_COLUMNS,
                   [{"request_id": "warmup-w1-0", "warmup": "1"}, {"request_id": "r00000"}])
         (folder / "summary.json").write_text("{}", encoding="utf-8")
+        (folder / "metadata.json").write_text(json.dumps({"cpu_stat": "unsupported"}), encoding="utf-8")
 
 
 def test_the_dry_run_check_passes_a_complete_round_and_names_a_run_whose_dispatcher_log_lost_a_row(tmp_path):
@@ -172,3 +173,55 @@ def test_dry_run_over_ssh_runs_all_36_conditions_in_its_own_folder_and_passes(tm
     assert len(list(tmp_path.glob("dry-run/*/ledger.csv"))) == 1
     assert not (tmp_path / "ledger.csv").exists()
     assert capsys.readouterr().out.splitlines()[-1].startswith("PASS")
+
+
+def test_processing_times_per_size_class_give_median_and_nearest_rank_p95():
+    rows = [{"size_class": "large", "processing_ms": ms} for ms in range(100, 120)] + [
+        {"size_class": "small", "processing_ms": 5.0}, {"size_class": "small", "processing_ms": 7.0}]
+
+    times = pilot.class_times(rows)
+
+    assert times["large"] == {"median": 109.5, "p95": 118, "count": 20}
+    assert times["small"] == {"median": 6.0, "p95": 7.0, "count": 2}
+
+
+def test_dispatcher_timeout_is_c_plus_one_times_the_large_class_p95_rounded_up():
+    assert pilot.dispatcher_timeout_ms(queue_capacity=4, large_p95_ms=118.3) == 592  # 591.5 rounds up
+
+
+def test_replaying_processing_times_gives_the_dispatcher_estimates_and_their_jumps():
+    estimates = pilot.replay_estimates([100.0, 200.0, 100.0], a=0.5)
+
+    assert estimates == [100.0, 150.0, 125.0]  # the first sample sets the estimate
+    assert pilot.jump_stats(estimates) == {"p95": 50.0, "max": 50.0}  # jumps of 50% and 16.7%
+
+
+def test_the_settle_table_averages_queue_lengths_and_estimates_per_time_bucket():
+    generator = [{"request_id": "r1", "planned_offset_s": "0.5"}, {"request_id": "r2", "planned_offset_s": "1.5"},
+                 {"request_id": "r3", "planned_offset_s": "6.0"}]
+    dispatcher = [
+        {"request_id": "warmup-w1-0", "unfinished_w1": "0", "unfinished_w2": "0", "estimate_w1_ms": "", "estimate_w2_ms": ""},
+        {"request_id": "r1", "unfinished_w1": "0", "unfinished_w2": "0", "estimate_w1_ms": "100.000", "estimate_w2_ms": "200.000"},
+        {"request_id": "r2", "unfinished_w1": "2", "unfinished_w2": "1", "estimate_w1_ms": "120.000", "estimate_w2_ms": "200.000"},
+        {"request_id": "r3", "unfinished_w1": "1", "unfinished_w2": "3", "estimate_w1_ms": "110.000", "estimate_w2_ms": "220.000"},
+    ]
+
+    assert pilot.settle_table(dispatcher, generator, bucket_s=5.0) == [
+        {"start_s": 0.0, "requests": 2, "unfinished_w1": 1.0, "unfinished_w2": 0.5, "estimate_w1_ms": 110.0, "estimate_w2_ms": 200.0},
+        {"start_s": 5.0, "requests": 1, "unfinished_w1": 1.0, "unfinished_w2": 3.0, "estimate_w1_ms": 110.0, "estimate_w2_ms": 220.0},
+    ]
+
+
+def test_the_dry_run_check_names_a_scenario_1_or_2_run_whose_throttling_counters_moved(tmp_path):
+    config = load_config(DEV_CONFIG)
+    complete_dry_run(tmp_path, config)
+    condition = next(c for c in round_conditions(config) if c.scenario == 1)
+    run_id = make_run_id(0, condition, 1)
+    folder = next(stage_dir(tmp_path, config.stage).glob(f"*/{run_id}"))
+    counters = {"nr_periods": 10, "nr_throttled": 0, "throttled_usec": 0}
+    moved = {**counters, "nr_throttled": 4, "throttled_usec": 900}
+    cpu_stat = {"w1": {"before": counters, "after": counters}, "w2": {"before": counters, "after": moved}}
+    (folder / "metadata.json").write_text(json.dumps({"cpu_stat": cpu_stat}), encoding="utf-8")
+
+    assert pilot.check_dry_run(tmp_path, config, 0) == [
+        f"{run_id}: w2 was throttled (nr_throttled rose by 4) in scenario 1, which has no quota"]
