@@ -525,7 +525,7 @@ def dry_run_step(args, config) -> None:
         print("\n".join(["FAIL", *(f"- {problem}" for problem in problems)]))
         sys.exit(1)
     print("PASS: all 36 runs finished, every generator row joins a dispatcher row, every summary computed, "
-          "and the ledger is complete.")
+          "the throttling counters stayed put in scenarios 1 and 2, and the ledger is complete.")
 
 
 STEPS = {"images": images_step, "calibrate": calibrate_step, "sweep": sweep_step, "quota-check": quota_check_step,
