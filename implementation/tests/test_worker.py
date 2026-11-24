@@ -101,10 +101,14 @@ async def start_blocking_request(client, gate, body):
 async def test_full_queue_rejects_at_once_with_503():
     gate = GatedProcess()
     body = jpeg(120, 80)
-    async with running(create_app(queue_capacity=1, process=gate)) as client:
+    app = create_app(queue_capacity=1, process=gate)
+    async with running(app) as client:
         running_task = await start_blocking_request(client, gate, body)
         queued_task = asyncio.create_task(process_request(client, "queued", body))
-        await asyncio.sleep(0.1)  # let the second request reach the queue
+        # Wait for the second request to reach the queue, however busy the machine is.
+        with anyio.fail_after(5):
+            while not app.state.queue.full():
+                await asyncio.sleep(0.01)
 
         with anyio.fail_after(2):
             rejected = await process_request(client, "extra", body)

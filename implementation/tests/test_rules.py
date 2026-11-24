@@ -22,7 +22,7 @@ def test_round_robin_select_alternates_over_100_picks():
 EXAMPLE_A = (WorkerView(unfinished=2, estimate_ms=100.0), WorkerView(unfinished=0, estimate_ms=500.0))
 
 
-def test_least_unfinished_rule_picks_idle_slow_worker_in_example_a():
+def test_least_unfinished_requests_rule_picks_idle_slow_worker_in_example_a():
     chosen, _ = select("lur", EXAMPLE_A, RuleState())
     assert chosen == 1  # B
 
@@ -39,12 +39,12 @@ def test_feedback_picks_idle_slow_worker_in_example_b():
     assert chosen == 1  # B: 500 ms against 1,000 ms
 
 
-def test_feedback_picks_like_least_unfinished_rule_in_example_c():
+def test_feedback_picks_like_least_unfinished_requests_rule_in_example_c():
     # Example C: equal estimates, so only the unfinished counts differ.
     workers = (WorkerView(unfinished=3, estimate_ms=200.0), WorkerView(unfinished=1, estimate_ms=200.0))
     feedback, _ = select("feedback", workers, RuleState())
-    least_unfinished, _ = select("lur", workers, RuleState())
-    assert feedback == least_unfinished == 1
+    least_unfinished_requests, _ = select("lur", workers, RuleState())
+    assert feedback == least_unfinished_requests == 1
 
 
 def test_weighted_round_robin_select_with_3_to_1_gives_3_and_1_in_every_block_of_4():
