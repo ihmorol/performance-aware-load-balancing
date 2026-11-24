@@ -151,7 +151,7 @@ It might help when workers have different speeds. Round-robin and rule 3 don't k
 
 It might not help, or might even lose, for several reasons:
 
-- When both workers have the same speed, the feedback rule and rule 3 make the same choice. Theory says so (Selen et al., Queueing Systems 2016). So in our first two scenarios we expect no clear difference between them.
+- When both workers have the same speed and their estimates are equal, the feedback rule picks what rule 3 picks: with equal rates, the shortest expected delay rule is the same as joining the shortest queue (Selen et al., Queueing Systems 2016). Our estimates come from measured times, so they are rarely exactly equal, and the two rules can still choose differently on single requests. In our first two scenarios we still expect no clear difference between them.
 - Rule 3 adjusts on its own, too. A slow worker finishes later, so its unfinished count rises, and rule 3 sends it less. The gap between rule 3 and the feedback rule may be small.
 - The average is always a bit old. It knows how the worker did recently, not how big the next image is.
 - Probes and the extra bookkeeping cost CPU time on the dispatcher.
@@ -342,11 +342,11 @@ The build is split into GitHub issues. Issue #1 holds the full spec, and issue #
 | #3 | The dispatcher with all four rules, warm-up, probes, and its log | Done, merged |
 | #4 | The load generator (schedule, open-loop sending) and the per-run summary | Done, merged |
 | #5 | The orchestrator that runs one whole run or a whole round on a laptop, plus the CPU and RAM samplers and the ledger | Done, merged |
-| #19 | Moving the main runs from the teammate's PC to cloud VMs (docs and decision) | Open, must close before #6 and #7 |
-| #6 | The cloud VM setup guide, service files, scripts, and the SSH version of the orchestrator | Not started |
-| #7 | One command per pilot step, plus the dry-run check | Not started |
+| #19 | Moving the main runs from the teammate's PC to cloud VMs (docs and decision) | Done, merged |
+| #6 | The cloud VM setup guide, service files, scripts, and the SSH version of the orchestrator | Done, merged, not yet run on cloud VMs |
+| #7 | One command per pilot step, plus the dry-run check | Done, merged, not yet run on cloud VMs |
 
-Status above updated 2026-11-23. Where the text below says "the teammate's PC", read "the cloud VMs".
+Status above updated 2026-11-24. Where the text below says "the teammate's PC", read "the cloud VMs".
 
 #3 and #4 can be built at the same time. #5 needs both. #6 and #7 come after #5 and can be built together.
 

@@ -30,3 +30,4 @@ These are not pilot parameters, but the runs can't start until they are answered
 - [ ] Machine type and zone. Plan: t2d-standard-1 in a us-central1 zone. Open: whether it is offered there for this account
 - [ ] Sign-up date. Open: the date the 90-day trial clock starts, recorded in `decisions.md`
 - [ ] Cost. Open: the real total, which depends on the run length the pilot sets
+- [ ] Thrown-out runs. The ledger can mark a run thrown out, but nothing says who decides it or on what grounds. Open: the owner states the rule before the main runs, so no run is thrown out after its result is seen

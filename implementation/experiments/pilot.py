@@ -18,6 +18,7 @@ import asyncio
 import csv
 import functools
 import json
+import math
 import re
 import socket
 import statistics
@@ -27,6 +28,7 @@ from pathlib import Path
 
 import httpx
 
+from dispatcher.rules import update_estimate
 from experiments.backend import UNSUPPORTED
 from experiments.backends import BACKENDS, make_backend
 from experiments.orchestrate import (IMPLEMENTATION, SCENARIO_FOLDERS, Condition, ledger_condition, make_run_id,
@@ -96,6 +98,19 @@ def check_dry_run(root: Path, config, round_: int) -> list[str]:
         folder = stage_dir(root, config.stage) / SCENARIO_FOLDERS[int(run_rows[0]["scenario"])] / run_id
         if not (folder / "summary.json").exists():
             problems.append(f"{run_id}: no summary.json")
+        scenario = int(run_rows[0]["scenario"])
+        try:
+            cpu_stat = json.loads((folder / "metadata.json").read_text(encoding="utf-8"))["cpu_stat"]
+        except (FileNotFoundError, KeyError):
+            problems.append(f"{run_id}: no cpu.stat readings in metadata.json")
+            cpu_stat = UNSUPPORTED
+        # Only scenario 3 has a quota, so the counters must stay put in scenarios 1 and 2.
+        if scenario != 3 and isinstance(cpu_stat, dict):
+            for worker, reading in cpu_stat.items():
+                rise = reading["after"]["nr_throttled"] - reading["before"]["nr_throttled"]
+                if rise:
+                    problems.append(f"{run_id}: {worker} was throttled (nr_throttled rose by {rise}) "
+                                    f"in scenario {scenario}, which has no quota")
         generator, dispatcher = _read_csv(folder / "generator.csv"), _read_csv(folder / "dispatcher.csv")
         if generator is None or dispatcher is None:
             problems.append(f"{run_id}: generator.csv or dispatcher.csv is missing")
@@ -172,18 +187,43 @@ def _default_rate(config, scenario: int, index: int) -> float:
 
 # The steps.
 
+def class_times(rows: list[dict]) -> dict[str, dict]:
+    """Median and nearest-rank p95 of the processing time of each size class."""
+    times: dict[str, list[float]] = {}
+    for row in rows:
+        times.setdefault(row["size_class"], []).append(float(row["processing_ms"]))
+    return {name: {"median": statistics.median(values), "p95": nearest_rank(values, 0.95), "count": len(values)}
+            for name, values in times.items()}
+
+
+def dispatcher_timeout_ms(queue_capacity: int, large_p95_ms: float) -> int:
+    """D from the spec: (C + 1) times the large class p95 on the quota-limited worker, rounded up."""
+    return math.ceil((queue_capacity + 1) * large_p95_ms)
+
+
 def images_step(args, config) -> None:
-    """Time each image alone on worker 1 and propose three size classes."""
+    """Time each image alone on one worker and propose three size classes; with --quota, on w2 under its quota."""
+    if args.quota and args.worker != "w2":
+        _stop("--quota times worker 2, the one that gets the quota; pass --worker w2")
     folder = _step_dir(args, "images")
     rows = []
+    quota = "none"
     backend = _backend(args, config)
     try:
-        backend.restart("w1")
-        backend.wait_healthy("w1")
+        if args.quota:
+            if config.quota.cpu_percent is None and backend.verify_quota("w2") != UNSUPPORTED:
+                _stop("quota.cpu_percent is unset; set the quota first")
+            backend.apply_quota("w2", config.quota.cpu_percent, config.quota.period_ms)
+            quota = backend.verify_quota("w2")
+        elif args.worker == "w2":
+            backend.clear_quota("w2")
+        backend.restart(args.worker)
+        backend.wait_healthy(args.worker)
+        url = config.addresses.workers[("w1", "w2").index(args.worker)]
         with httpx.Client(timeout=120.0) as client:
             for image in generate_image_set(config.images, config.seeds.image_set):
                 for repeat in range(args.repeats):
-                    reply = client.post(f"{config.addresses.workers[0]}/process", content=image.data,
+                    reply = client.post(f"{url}/process", content=image.data,
                                         headers=_worker_request(image, f"pilot-{image.image_id}-{repeat}"))
                     reply.raise_for_status()
                     rows.append({"image_id": image.image_id, "size_class": image.size_class, "repeat": repeat,
@@ -201,9 +241,96 @@ def images_step(args, config) -> None:
         times = [medians[m] for m in members]
         lines.append(f"| {name} | {', '.join(members)} | {statistics.median(times):.1f} | "
                      f"{min(times):.1f} to {max(times):.1f} |")
-    lines.append(f"\nEach image was processed alone on w1, {args.repeats} times. Classes split at the two "
-                 "largest gaps between the sorted medians.")
+    lines += ["", "| Current class | Requests | Median ms | p95 ms |", "|---|---|---|---|"]
+    per_class = class_times(rows)
+    for name in CLASSES:
+        if name in per_class:
+            c = per_class[name]
+            lines.append(f"| {name} | {c['count']} | {c['median']:.1f} | {c['p95']:.1f} |")
+    lines.append("")
+    lines.append(f"Each image was processed alone on {args.worker}, {args.repeats} times, quota on w2: {quota}. "
+                 "Proposed classes split at the two largest gaps between the sorted medians.")
+    if args.quota and "large" in per_class:
+        if quota == UNSUPPORTED:
+            lines.append("This backend can't set a quota, so these times are without it and can't set D or T.")
+        elif config.worker.queue_capacity is not None:
+            d = dispatcher_timeout_ms(config.worker.queue_capacity, per_class["large"]["p95"])
+            lines.append(f"With C = {config.worker.queue_capacity}: D = (C + 1) x {per_class['large']['p95']:.1f} ms"
+                         f" = {d} ms. T is a multiple of the large class time; pick it and record the multiple.")
     _print_block("images", args, folder, lines)
+
+
+def replay_estimates(samples: list[float], a: float) -> list[float]:
+    """The dispatcher's estimate after each processing time sample, with EWMA weight a."""
+    estimates, estimate = [], None
+    for sample in samples:
+        estimate = update_estimate(estimate, sample, a)
+        estimates.append(estimate)
+    return estimates
+
+
+def jump_stats(estimates: list[float]) -> dict:
+    """p95 and largest change of the estimate from one sample to the next, as a percent of the old value."""
+    jumps = [abs(new - old) / old * 100 for old, new in zip(estimates, estimates[1:])]
+    return {"p95": nearest_rank(jumps, 0.95), "max": max(jumps) if jumps else None}
+
+
+def settle_table(dispatcher_rows: list[dict], generator_rows: list[dict], bucket_s: float) -> list[dict]:
+    """Per time bucket of planned send time: client requests, mean unfinished counts, mean estimates at decision."""
+    offsets = {row["request_id"]: float(row["planned_offset_s"]) for row in generator_rows}
+    buckets: dict[int, list[dict]] = {}
+    for row in dispatcher_rows:
+        if row["request_id"] in offsets:  # client requests only; warm-up and probes have no planned time
+            buckets.setdefault(int(offsets[row["request_id"]] // bucket_s), []).append(row)
+
+    def mean(rows, key):
+        values = [float(row[key]) for row in rows if row[key] != ""]
+        return statistics.mean(values) if values else None
+
+    return [{"start_s": index * bucket_s, "requests": len(rows),
+             **{key: mean(rows, key) for key in ("unfinished_w1", "unfinished_w2", "estimate_w1_ms", "estimate_w2_ms")}}
+            for index, rows in sorted(buckets.items())]
+
+
+def estimates_step(args, config) -> None:
+    """One run, then the estimate jumps for each candidate EWMA weight, and how estimates and queues settle."""
+    root = _step_dir(args, "estimates")
+    rate = args.rate or _default_rate(config, args.scenario, 1)
+    folder = _one_run(args, config, root, Condition(args.scenario, args.rule, rate), args.run_length)
+    dispatcher = _read_csv(folder / "dispatcher.csv")
+    generator = _read_csv(folder / "generator.csv")
+    # In log order, which is the order the dispatcher fed each worker's estimate.
+    samples = {worker: [float(row["worker_processing_ms"]) for row in dispatcher
+                        if row["chosen_worker"] == worker and row["outcome"] == protocol.SUCCESS]
+               for worker in ("w1", "w2")}
+
+    lines = ["| EWMA weight a | w1 p95 jump % | w1 largest jump % | w2 p95 jump % | w2 largest jump % |",
+             "|---|---|---|---|---|"]
+    for a in args.candidates:
+        stats = {worker: jump_stats(replay_estimates(samples[worker], a)) for worker in ("w1", "w2")}
+        lines.append(f"| {a:g} | {_ms(stats['w1']['p95'])} | {_ms(stats['w1']['max'])} | "
+                     f"{_ms(stats['w2']['p95'])} | {_ms(stats['w2']['max'])} |")
+
+    a = config.dispatcher.ewma_weight
+    k = config.dispatcher.warmup_count
+    lines += ["", f"| Worker | Warm-up samples K | Estimate after warm-up ms | Median estimate after it ms (a = {a:g}) |",
+              "|---|---|---|---|"]
+    for worker in ("w1", "w2"):
+        estimates = replay_estimates(samples[worker], a)
+        after = estimates[k:] if len(estimates) > k else []
+        lines.append(f"| {worker} | {k} | {_ms(estimates[k - 1] if 0 < k <= len(estimates) else None)} | "
+                     f"{_ms(statistics.median(after) if after else None)} |")
+
+    lines += ["", "| From s | Requests | Mean unfinished w1 | Mean unfinished w2 | Mean estimate w1 ms | "
+              "Mean estimate w2 ms |", "|---|---|---|---|---|---|"]
+    for row in settle_table(dispatcher, generator, args.bucket):
+        lines.append(f"| {row['start_s']:g} | {row['requests']} | {_ms(row['unfinished_w1'])} | "
+                     f"{_ms(row['unfinished_w2'])} | {_ms(row['estimate_w1_ms'])} | {_ms(row['estimate_w2_ms'])} |")
+    lines.append(f"\nScenario {args.scenario}, rule `{args.rule}` (its routing doesn't read the estimate), {rate:g} "
+                 "per s. Jumps replay each worker's samples, warm-up and probes included, through the dispatcher's "
+                 "EWMA update. Choose a from the jumps, K so the estimate after warm-up is near its later median, "
+                 "and W so the queue lengths and estimates have settled by then.")
+    _print_block("estimates", args, folder, lines)
 
 
 async def _closed_loop(url: str, jobs, images: dict, duration_s: float, in_flight: int = 2) -> float:
@@ -344,7 +471,8 @@ def send_accuracy_step(args, config) -> None:
     text = args.config.read_text(encoding="utf-8-sig")
     if not re.search(r"(?m)^spin_wait\s*=", text):
         _stop("the config has no generator.spin_wait line to switch")
-    lines = ["| Spin-wait | Requests | Median lag ms | p95 lag ms | Highest lag ms |", "|---|---|---|---|---|"]
+    lines = ["| Spin-wait | Requests | Median lag ms | p95 lag ms | Highest lag ms | p95 response ms |",
+             "|---|---|---|---|---|---|"]
     for attempt, spin in ((1, "false"), (2, "true")):
         # Only the generator reads the switch; the services keep the original config.
         variant = root / f"config-spin-wait-{spin}.toml"
@@ -354,9 +482,11 @@ def send_accuracy_step(args, config) -> None:
         lags = [float(row["send_lag_ms"]) for row in _read_csv(folder / "generator.csv")]
         lines.append(f"| {'on' if spin == 'true' else 'off'} | {len(lags)} | "
                      f"{_ms(statistics.median(lags) if lags else None)} | {_ms(nearest_rank(lags, 0.95))} | "
-                     f"{_ms(max(lags) if lags else None)} |")
+                     f"{_ms(max(lags) if lags else None)} | {_ms(_summary(folder)['p95_ms'])} |")
     lines.append(f"\nSend lag is the actual minus the planned send time on generator host "
-                 f"`{socket.gethostname()}`. Scenario {args.scenario}, rule `{args.rule}`, {args.rate:g} per s.")
+                 f"`{socket.gethostname()}`. Scenario {args.scenario}, rule `{args.rule}`, {args.rate:g} per s. "
+                 "Spin-wait busy-waits up to 20 ms before each send, which can delay reading replies; compare "
+                 "the p95 response times before turning it on.")
     _print_block("send-accuracy", args, root, lines)
 
 
@@ -395,12 +525,12 @@ def dry_run_step(args, config) -> None:
         print("\n".join(["FAIL", *(f"- {problem}" for problem in problems)]))
         sys.exit(1)
     print("PASS: all 36 runs finished, every generator row joins a dispatcher row, every summary computed, "
-          "and the ledger is complete.")
+          "the throttling counters stayed put in scenarios 1 and 2, and the ledger is complete.")
 
 
 STEPS = {"images": images_step, "calibrate": calibrate_step, "sweep": sweep_step, "quota-check": quota_check_step,
          "bottleneck": bottleneck_step, "send-accuracy": send_accuracy_step, "spread": spread_step,
-         "dry-run": dry_run_step}
+         "estimates": estimates_step, "dry-run": dry_run_step}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -416,13 +546,19 @@ def main(argv: list[str] | None = None) -> None:
         if name not in ("images", "calibrate", "dry-run"):
             step.add_argument("--scenario", type=int, choices=(1, 2, 3), default=2)
             step.add_argument("--rule", choices=("rr", "wrr", "lur", "feedback"),
-                              default="lur" if name == "spread" else "rr")
-        if name in ("quota-check", "spread"):
+                              default="lur" if name in ("spread", "estimates") else "rr")
+        if name in ("quota-check", "spread", "estimates"):
             step.add_argument("--rate", type=float, help="requests per second; a configured rate by default")
         if name in ("bottleneck", "send-accuracy"):
             step.add_argument("--rate", type=float, required=True, help="requests per second")
     sub["images"].add_argument("--repeats", type=int, default=5, help="times each image is processed")
+    sub["images"].add_argument("--worker", choices=("w1", "w2"), default="w1", help="worker that times the images")
+    sub["images"].add_argument("--quota", action="store_true",
+                               help="apply the scenario 3 quota to w2 first, for D and T; needs --worker w2")
     sub["calibrate"].add_argument("--duration", type=float, default=60.0, help="seconds per worker and scenario")
+    sub["estimates"].add_argument("--candidates", type=float, nargs="+", default=[0.1, 0.2, 0.3],
+                                  help="EWMA weights to compare")
+    sub["estimates"].add_argument("--bucket", type=float, default=5.0, help="seconds per row of the settle table")
     sub["sweep"].add_argument("--rates", type=float, nargs="+", help="rates to step through; the configured ones by default")
     sub["sweep"].add_argument("--step-length", type=float, help="run length of each step in seconds")
     args = parser.parse_args(argv)

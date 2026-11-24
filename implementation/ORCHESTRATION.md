@@ -62,6 +62,7 @@ These run on the four cloud VMs from `implementation/cloud-deployment.md`, not o
 - [ ] Run the pilot steps from #7 in the order of the spec's "Pilot and calibration" table and record each value with its method in `notes/decisions.md`.
 - [ ] Fill the config, set its stage to `main`, commit it, and record the commit id.
 - [ ] Run `experiments.pilot dry-run --backend ssh` and fix anything until it prints PASS.
+- [ ] From the freeze to the last main run, commit and pull nothing on the VMs; copy results off as `implementation/setup/README.md` says under "During the main runs".
 - [ ] Main runs can start (weeks 4 to 5).
 
 ## Progress

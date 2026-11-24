@@ -32,7 +32,7 @@ The `plb` user comes from the SSH key added in phase 5 (`ssh-keys="plb:KEY"`). G
 
 Follow "Azure for Students, if no card works" in [../cloud-deployment.md](../cloud-deployment.md). Create the four VMs with the administrator name `plb`, in one virtual network and subnet, with the fixed private addresses above. Allow SSH only from your own IP address. The network's default rules allow all traffic inside the virtual network, so the service ports need no extra rule.
 
-The free sizes are burstable. Record each VM's "CPU Credits Remaining" metric before and after every pilot and main run, and stop when it gets low.
+The free sizes are burstable. Record each VM's "CPU Credits Remaining" metric before and after every pilot and main run, and stop when it gets low. Reading it 180 times by hand isn't practical, so after each session open the metric for that session's time range in Azure Monitor, one chart per VM, and compare it with the start and end times in `results/ledger.csv`. Mark any run during which a VM ran out of credits as thrown out, with that reason (`experiments.orchestrate throw-out`).
 
 ## VM install
 
@@ -123,6 +123,16 @@ for port in 20:8100 21:8101 22:8102; do curl -s http://10.128.0.${port%%:*}:${po
 ```
 
 The health checks answer only while a service runs, so the first `orchestrate run` is the real test. The scenario 3 run's `metadata.json` must show `nr_throttled` rising on worker 2. Run one per scenario for the hardware check.
+
+## During the main runs
+
+From the freeze to the last main run, every run records the generator VM's commit, and the orchestrator refuses a run when a VM's clone is at another commit. So in that time:
+
+- Commit nothing, pull nothing, and edit no tracked file on `plb-gen` or the other VMs.
+- Copy results off with `scp` (or `gcloud compute scp` from Cloud Shell) and commit them from another clone, for example on a laptop.
+- Work inside `tmux` on `plb-gen`, so a dropped SSH connection doesn't stop a round. `orchestrate round` resumes from the ledger after a crash.
+
+If code must change after the freeze, the runs before and after it come from different commits. Stop, record it in `notes/decisions.md`, and redo the affected rounds.
 
 ## Reset
 

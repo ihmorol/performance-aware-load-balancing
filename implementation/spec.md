@@ -168,7 +168,7 @@ The real order of work is: build and test locally, deploy to VMs, pilot, calibra
   2. Apply the quota to worker 2 for scenario 3 with `systemctl set-property --runtime` (CPUQuota and CPUQuotaPeriodSec), or clear it for scenarios 1 and 2. Read the cgroup's cpu.max to confirm.
   3. Restart both worker services, then the dispatcher service with the run's rule, scenario, rate, weights, and run id. Wait until every health check passes. The dispatcher only reports healthy after its warm-up.
   4. Read cpu.stat on both workers and the dispatcher CPU time. Start the samplers.
-  5. Run the load generator with the saved schedule and wait for it to finish.
+  5. Run the load generator and wait for it to finish. It rebuilds the schedule from the same seed, which gives the same requests as the copy saved in the run folder.
   6. Read cpu.stat and dispatcher CPU time again. Stop the samplers. Ask the dispatcher and workers to write their logs. Copy every file to the host.
   7. Write the run metadata (commit, config hash, seeds, counters, CPU times, timings) and the per-run summary.
   8. Mark the run finished, or failed with a reason, in the ledger.
@@ -289,6 +289,7 @@ Each slice ends with something runnable and tested. Slices 1 to 8 need only a la
 - Cloud VMs share physical machines with other customers, and free burstable sizes can drop to a low baseline when their CPU credits run out. The main runs use a size where a vCPU is a whole core and does not burst (t2d-standard-1 on Google Cloud). If a burstable size has to be used, each VM's credit balance is recorded around every run. See `implementation/cloud-deployment.md`.
 - Uploading image bytes means the 1 vCPU dispatcher handles every image twice (in and out). The pilot's bottleneck check has to show the dispatcher keeps up at the top rate. If it doesn't, the top rate comes down or the paper discloses it.
 - Weighted round-robin gets advance knowledge of the slowed worker through calibration, and the feedback rule has to learn it at run time. The paper states this.
+- Three more details the paper states. The worker stamps a request's arrival before its upload has finished, so queue wait and the expiry check include the upload time, more so for large images. After a dispatcher timeout, the worker still processes the request if its budget allows, so it can spend time on work nobody waits for. The dispatcher log has no time column, so probe times during the load can't be told from those after it.
 - Warm-up uses a medium image and probes use a small one, and both feed the same estimate as mixed traffic. A probe can make an idle worker look faster than it is for mixed images until real replies correct it. The paper states this too.
 - Four choices were made while writing this spec, not in the grilling session. The owner confirmed all four on 2026-11-19:
   - A probe also requires the worker to have no unfinished requests, since probing a worker that still holds work tells the dispatcher nothing new.
